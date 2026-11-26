@@ -1,15 +1,16 @@
 // Service worker for proportion only.
 // Bump the number in VERSION to make phones drop the old cache right away.
 const PREFIX = 'proportion-';
-const VERSION = PREFIX + 'v1';
+const VERSION = PREFIX + 'v2';
 
 const ASSETS = [
-  './keisha_proportion_check.html',
+  './',
+  './index.html',
   './manifest-proportion.json',
-  './icons/proportion-180.png',
-  './icons/proportion-192.png',
-  './icons/proportion-512.png',
-  './icons/proportion-maskable-512.png'
+  './proportion-180.png',
+  './proportion-192.png',
+  './proportion-512.png',
+  './proportion-maskable-512.png'
 ];
 
 self.addEventListener('install', (event) => {
