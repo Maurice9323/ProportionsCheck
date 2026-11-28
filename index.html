@@ -175,6 +175,13 @@
           <label><input type="radio" name="hm" value="floor"> Closer or farther than her (uses the eye-level line)</label>
           <label id="finderWrap"><input type="checkbox" id="finder"> Find eye level for me (from two edge lines)</label>
         </div>
+        <div class="row stack" id="hzBox">
+          <label><input type="checkbox" id="hzon"> Beach or open field, nothing to measure against (use the horizon)</label>
+          <span class="hint" id="camWrap">How high was the camera?</span>
+          <select id="cam"></select>
+          <label id="camNWrap"><input type="number" id="camN" min="5" step="1"> in</label>
+          <span class="hint" id="hzHint">Works when the ground is flat and the camera is level. The horizon sits at the camera’s height, so the gap from her soles up to the horizon equals that height.</span>
+        </div>
         <div class="row"><label>Footwear <select id="shoes"><option value="0">Barefoot</option><option value="1">Flat shoes (−1 in)</option><option value="3">Heels (−3 in)</option></select></label></div>
       </div>
     </div>
@@ -213,6 +220,7 @@
         <li>Turned at an angle? Turn on Turn angle and click her face edges and nose tip. Widths get corrected. Past about 45°, widths can't be trusted.</li>
         <li>Real height needs something of known size. Two references are better than one: if they disagree, the AI drew one at the wrong size. Small things (phone, can, card) are for close-ups.</li>
         <li>Eye level is the height of the camera. On a beach it's where the water meets the sky. Indoors, "Find eye level for me" works it out from two edges that run away from you.</li>
+        <li>Beach or open field with nothing to measure against? Set Reference 1 to "Nothing to measure against", turn on the horizon option, pick how high the camera was, and click the horizon. It gives an Estimate: good to a few inches when the camera was level and the sand is flat.</li>
         <li>Lying down: measure only when the camera looks straight down at her or straight from the side.</li>
         <li>Sizes from a front picture alone are ranges. Add a side picture of the same character for single numbers, cup size, volumes and shoe size.</li>
         <li>Clothes add width. Measure sizes on fitted clothing or none.</li>
@@ -234,6 +242,7 @@ var TV_HEIGHT_PER_DIAG = 9 / Math.sqrt(16 * 16 + 9 * 9);   // 16:9 screen height
 // kind: floor = stands on the floor (default); point = a point at a known height above the floor;
 //       any = small object measured end to end in any direction, right beside her; len = mattress length (lying mode)
 var REFS = [
+  { id: 'none',    g: 'None', name: 'None in the picture', none: true, kind: 'none', tol: 0 },
   { id: 'door',    g: 'Walls, doors, stairs', name: 'Door (80 in)', inches: 80, tol: 1 },
   { id: 'handle',  g: 'Walls, doors, stairs', name: 'Door handle (36 in), loose', inches: 36, tol: 2, kind: 'point', top: 'The middle of the door handle.', bot: 'The floor straight below it.' },
   { id: 'switch',  g: 'Walls, doors, stairs', name: 'Light switch, center (48 in)', inches: 48, tol: 2, kind: 'point', top: 'The middle of the light switch.', bot: 'The floor straight below it.' },
@@ -242,6 +251,8 @@ var REFS = [
   { id: 'steps',   g: 'Walls, doors, stairs', name: 'Stair steps (7.5 in each), count them', per: 7.5, tol: 0.25, unit: 'steps', top: 'The top edge of a higher step.', bot: 'The floor or step you count from, straight below.' },
   { id: 'brick',   g: 'Walls, doors, stairs', name: 'Brick rows (3 rows = 8 in), count them', per: 8 / 3, tol: 0.06, unit: 'rows', top: 'The top of a brick row.', bot: 'The ground or the row you count from, straight below.' },
   { id: 'block',   g: 'Walls, doors, stairs', name: 'Concrete block rows (8 in each), count them', per: 8, tol: 0.1, unit: 'rows', top: 'The top of a block row.', bot: 'The ground or the row you count from, straight below.' },
+  { id: 'winTop',  g: 'Walls, doors, stairs', name: 'Top of a window (80 in), very loose', inches: 80, tol: 6, kind: 'point', top: 'The top edge of the window opening (where the glass and frame start).', bot: 'The floor straight below it.' },
+  { id: 'winSill', g: 'Walls, doors, stairs', name: 'Window sill (36 in), very loose', inches: 36, tol: 6, kind: 'point', top: 'The window sill (bottom of the window opening).', bot: 'The floor straight below it.' },
   { id: 'ceil8',   g: 'Walls, doors, stairs', name: '8-ft ceiling (96 in), loose', inches: 96, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
   { id: 'ceil9',   g: 'Walls, doors, stairs', name: '9-ft ceiling (108 in), loose', inches: 108, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
   { id: 'counter', g: 'Kitchen', name: 'Kitchen counter (36 in)', inches: 36, tol: 1 },
@@ -253,6 +264,10 @@ var REFS = [
   { id: 'chair',   g: 'Dining and living', name: 'Dining chair seat (18 in)', inches: 18, tol: 1, top: 'The top of the seat.' },
   { id: 'cstool',  g: 'Dining and living', name: 'Counter stool seat (24 in)', inches: 24, tol: 1, top: 'The top of the seat.' },
   { id: 'bstool',  g: 'Dining and living', name: 'Bar stool seat (30 in)', inches: 30, tol: 1, top: 'The top of the seat.' },
+  { id: 'dress3',  g: 'Dining and living', name: 'Dresser, 3 drawers (33 in), loose', inches: 33, tol: 3, top: 'The top of the dresser.' },
+  { id: 'dress4',  g: 'Dining and living', name: 'Dresser, 4 drawers (40 in), loose', inches: 40, tol: 4, top: 'The top of the dresser.' },
+  { id: 'dress5',  g: 'Dining and living', name: 'Tall chest, 5 drawers (52 in), very loose', inches: 52, tol: 8, top: 'The top of the chest.' },
+  { id: 'bench',   g: 'Dining and living', name: 'Indoor bench seat (18.5 in), loose', inches: 18.5, tol: 2, top: 'The top of the seat.' },
   { id: 'tv',      g: 'Dining and living', name: 'TV screen (enter its size)', tv: true, tol: 0.3, kind: 'any', unit: 'in TV', top: 'The top edge of the picture area (not the frame).', bot: 'The bottom edge of the picture area.' },
   { id: 'vanity',  g: 'Bathroom', name: 'Bathroom vanity (34.5 in)', inches: 34.5, tol: 1.5 },
   { id: 'toilet',  g: 'Bathroom', name: 'Toilet seat (17 in)', inches: 17, tol: 2, top: 'The top of the toilet seat.' },
@@ -266,27 +281,57 @@ var REFS = [
   { id: 'mtwin',   g: 'Bedroom', name: 'Twin or full mattress length (75 in), lying mode', inches: 75, tol: 1, kind: 'len' },
   { id: 'mqueen',  g: 'Bedroom', name: 'Queen or king mattress length (80 in), lying mode', inches: 80, tol: 1, kind: 'len' },
   { id: 'mcal',    g: 'Bedroom', name: 'California king mattress length (84 in), lying mode', inches: 84, tol: 1, kind: 'len' },
+  { id: 'mailbox', g: 'Outdoors and sports', name: 'Curbside mailbox, bottom (43 in)', inches: 43, tol: 2, kind: 'point', top: 'The bottom of the mailbox (where mail goes in).', bot: 'The road or ground straight below it.' },
+  { id: 'picnicT', g: 'Outdoors and sports', name: 'Picnic table top (30 in)', inches: 30, tol: 2, top: 'The top of the table.' },
+  { id: 'picnicB', g: 'Outdoors and sports', name: 'Picnic table bench (18 in)', inches: 18, tol: 1, top: 'The top of the bench seat.' },
+  { id: 'obench',  g: 'Outdoors and sports', name: 'Park bench seat (17 in), loose', inches: 17, tol: 2, top: 'The top of the seat.' },
+  { id: 'plate',   g: 'Outdoors and sports', name: 'US license plate, long side (12 in)', inches: 12, tol: 0.1, kind: 'any', top: 'One end of the plate.', bot: 'The other end of the long side.' },
   { id: 'stop',    g: 'Outdoors and sports', name: 'Stop sign, top to bottom (30 in), loose', inches: 30, tol: 3, kind: 'any', top: 'The top edge of the sign.', bot: 'The bottom edge of the sign.' },
   { id: 'hoop',    g: 'Outdoors and sports', name: 'Basketball rim (120 in)', inches: 120, tol: 0.5, top: 'The top of the rim.', bot: 'The ground straight below the rim.' },
   { id: 'vbw',     g: 'Outdoors and sports', name: "Women's volleyball net (88.1 in)", inches: 88.125, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
   { id: 'vbm',     g: 'Outdoors and sports', name: "Men's volleyball net (95.6 in)", inches: 95.625, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
+  { id: 'soccer',  g: 'Outdoors and sports', name: 'Soccer goal, crossbar bottom (96 in)', inches: 96, tol: 1, top: 'The bottom edge of the crossbar.', bot: 'The ground straight below.' },
+  { id: 'bsoccer', g: 'Outdoors and sports', name: 'Beach soccer goal, crossbar bottom (86.6 in)', inches: 86.6, tol: 1.5, top: 'The bottom edge of the crossbar.', bot: 'The sand straight below.' },
   { id: 'tennis',  g: 'Outdoors and sports', name: 'Tennis net, center (36 in)', inches: 36, tol: 0.5, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
   { id: 'iphonePM', g: 'Small things (close-ups)', name: 'iPhone 17 Pro Max, long side (6.43 in)', inches: 6.43, tol: 0.05, kind: 'any', top: 'One end of the phone.', bot: 'The other end of the long side.' },
   { id: 'iphoneP', g: 'Small things (close-ups)', name: 'iPhone 17 Pro, long side (5.91 in)', inches: 5.91, tol: 0.05, kind: 'any', top: 'One end of the phone.', bot: 'The other end of the long side.' },
   { id: 'wine',    g: 'Small things (close-ups)', name: 'Wine bottle, 750 ml (11.8 in)', inches: 11.8, tol: 0.5, kind: 'any', top: 'The top of the bottle.', bot: 'The bottom of the bottle.' },
   { id: 'can',     g: 'Small things (close-ups)', name: 'Soda can, 12 oz (4.83 in)', inches: 4.83, tol: 0.05, kind: 'any', top: 'The top of the can.', bot: 'The bottom of the can.' },
-  { id: 'paper',   g: 'Small things (close-ups)', name: 'Letter paper, long side (11 in)', inches: 11, tol: 0.05, kind: 'any', top: 'One end of the sheet.', bot: 'The other end of the long side.' },
+  { id: 'paper',   g: 'Paper, posters, frames', name: 'Letter paper, long side (11 in)', inches: 11, tol: 0.05, kind: 'any', top: 'One end of the sheet.', bot: 'The other end of the long side.' },
+  { id: 'legal',   g: 'Paper, posters, frames', name: 'Legal paper, long side (14 in)', inches: 14, tol: 0.05, kind: 'any', top: 'One end of the sheet.', bot: 'The other end of the long side.' },
+  { id: 'tabloid', g: 'Paper, posters, frames', name: 'Tabloid paper, long side (17 in)', inches: 17, tol: 0.05, kind: 'any', top: 'One end of the sheet.', bot: 'The other end of the long side.' },
+  { id: 'post17',  g: 'Paper, posters, frames', name: 'Poster 11×17, long side (17 in)', inches: 17, tol: 0.2, kind: 'any', top: 'One end of the poster print (not the frame).', bot: 'The other end of the long side.' },
+  { id: 'post24',  g: 'Paper, posters, frames', name: 'Poster 18×24, long side (24 in)', inches: 24, tol: 0.25, kind: 'any', top: 'One end of the poster print (not the frame).', bot: 'The other end of the long side.' },
+  { id: 'post36',  g: 'Paper, posters, frames', name: 'Poster 24×36, long side (36 in)', inches: 36, tol: 0.3, kind: 'any', top: 'One end of the poster print (not the frame).', bot: 'The other end of the long side.' },
+  { id: 'post40',  g: 'Paper, posters, frames', name: 'Movie poster 27×40, long side (40 in)', inches: 40, tol: 0.4, kind: 'any', top: 'One end of the poster print (not the frame).', bot: 'The other end of the long side.' },
+  { id: 'ph6',     g: 'Paper, posters, frames', name: 'Photo 4×6, long side (6 in)', inches: 6, tol: 0.05, kind: 'any', top: 'One end of the photo inside the frame (not the frame or mat).', bot: 'The other end of the long side.' },
+  { id: 'ph7',     g: 'Paper, posters, frames', name: 'Photo 5×7, long side (7 in)', inches: 7, tol: 0.05, kind: 'any', top: 'One end of the photo inside the frame (not the frame or mat).', bot: 'The other end of the long side.' },
+  { id: 'ph10',    g: 'Paper, posters, frames', name: 'Photo 8×10, long side (10 in)', inches: 10, tol: 0.05, kind: 'any', top: 'One end of the photo inside the frame (not the frame or mat).', bot: 'The other end of the long side.' },
+  { id: 'ph14',    g: 'Paper, posters, frames', name: 'Photo 11×14, long side (14 in)', inches: 14, tol: 0.1, kind: 'any', top: 'One end of the photo inside the frame (not the frame or mat).', bot: 'The other end of the long side.' },
+  { id: 'ph20',    g: 'Paper, posters, frames', name: 'Photo 16×20, long side (20 in)', inches: 20, tol: 0.1, kind: 'any', top: 'One end of the photo inside the frame (not the frame or mat).', bot: 'The other end of the long side.' },
   { id: 'bill',    g: 'Small things (close-ups)', name: 'Dollar bill, long side (6.14 in)', inches: 6.14, tol: 0.03, kind: 'any', top: 'One end of the bill.', bot: 'The other end of the long side.' },
   { id: 'card',    g: 'Small things (close-ups)', name: 'Credit card or license, long side (3.37 in)', inches: 3.37, tol: 0.02, kind: 'any', top: 'One end of the card.', bot: 'The other end of the long side.' },
   { id: 'woman',   g: 'People (loose)', name: 'Average US woman (63.5 in)', inches: 63.5, tol: 3, top: 'The top of her head.', bot: 'Her soles.' },
   { id: 'man',     g: 'People (loose)', name: 'Average US man (68.9 in)', inches: 68.9, tol: 3, top: 'The top of his head.', bot: 'His soles.' },
   { id: 'custom',  g: 'Custom', name: 'Custom size (enter inches)', custom: true, tol: 0, unit: 'in' }
 ];
-function refById(id) { for (var i = 0; i < REFS.length; i++) if (REFS[i].id === id) return REFS[i]; return REFS[0]; }
+function refById(id) { for (var i = 0; i < REFS.length; i++) if (REFS[i].id === id) return REFS[i]; return REFS[1]; }
+// Camera heights for the horizon method (flat ground, level camera). Standing eye level: US Army 2012 survey medians
+// (men 64.6 in, women 59.7 in) rounded to a middle value.
+var CAMS = [
+  { id: 'eye',   name: 'Standing, at eye level (about 62 in)', inches: 62, tol: 4 },
+  { id: 'chest', name: 'Standing, held at chest (about 50 in)', inches: 50, tol: 6 },
+  { id: 'waist', name: 'Held at the waist or sitting (about 40 in)', inches: 40, tol: 6 },
+  { id: 'low',   name: 'Low, near the sand (about 20 in)', inches: 20, tol: 8 },
+  { id: 'custom', name: 'Custom (enter inches)', custom: true, tol: 2 }
+];
+function camById(id) { for (var i = 0; i < CAMS.length; i++) if (CAMS[i].id === id) return CAMS[i]; return CAMS[0]; }
+function camInches(id, n) { var c = camById(id); if (c.custom) return n > 0 ? { inches: n, tol: c.tol } : null; return { inches: c.inches, tol: c.tol }; }
 function refNeedsNumber(d) { return !!(d.custom || d.per || d.tv); }
 // n = custom inches, a count (steps, rows) or a TV size.
 function refInches(id, n) {
   var d = refById(id), out;
+  if (d.none) return undefined;
   if (d.custom) out = n > 0 ? { inches: n, tol: 0 } : null;
   else if (d.per) out = n >= 1 ? { inches: d.per * n, tol: d.tol * n } : null;
   else if (d.tv) out = n > 0 ? { inches: n * TV_HEIGHT_PER_DIAG, tol: d.tol } : null;
@@ -701,7 +746,8 @@ function scaleAndHeight(p, o, r) {
   var lying = !!o.lying, anyFloorRef = false;
   (o.refs || []).forEach(function (ref) { if (ref && ref.kind !== 'any' && ref.kind !== 'len') anyFloorRef = true; });
   var method = lying ? 'same' : (o.method || 'same');
-  var hy = method === 'floor' && anyFloorRef ? eyeLevelY(p, o, r) : null;
+  var wantHz = !lying && o.horizon && o.cam;
+  var hy = (method === 'floor' && anyFloorRef) || wantHz ? eyeLevelY(p, o, r) : null;
   if (hy != null) r.hzY = hy;
   var ipps = [], tols = [], pxs = [], hzRel = 0, kinds = [];
   [['r1Top', 'r1Bot'], ['r2Top', 'r2Bot']].forEach(function (k, i) {
@@ -740,15 +786,23 @@ function scaleAndHeight(p, o, r) {
     pxs.forEach(function (px) { clickRel += Math.pow(2.8 / px, 2) / (pxs.length * pxs.length); });
     r.scaleRel = Math.sqrt(tolRel * tolRel + clickRel + hzRel * hzRel);
     if (r.total && Math.max.apply(null, pxs) < 0.15 * r.total) pushOnce(r.notes, 'The reference is small next to her, so the height is less precise. Zoom in for those clicks.');
-  } else if (r.head) {
-    if (o.keisha) { r.ipp = KEISHA_HEAD_IN / r.head; r.scaleFrom = 'keisha'; r.scaleRel = 0.06; }
-    else if (r.heads) {
-      // Real people: head size grows slowly with height, so more head-lengths means a taller person.
-      var est = AVG_WOMAN_IN * Math.pow(r.heads / (AVG_WOMAN_IN / HEAD_AVG_IN), 1 / 0.7);
-      r.ipp = est / r.total; r.scaleFrom = 'adjusted'; r.scaleRel = 0.08;
-    } else { r.ipp = HEAD_AVG_IN / r.head; r.scaleFrom = 'avghead'; r.scaleRel = 0.08; }
-  } else if (o.keisha && o.view !== 'side' && p.crotch && p.sole) {
-    r.ipp = 0.47 * KEISHA_IN / (along(r.ax, p.sole) - along(r.ax, p.crotch)); r.scaleFrom = 'keishaLegs'; r.scaleRel = 0.06;
+  } else if (wantHz && hy != null && p.sole && p.sole.y - hy > 0) {
+    // Horizon method: on flat ground with a level camera, the horizon sits at camera height everywhere,
+    // so the gap from her soles up to the horizon line is the camera height in inches.
+    var dH = p.sole.y - hy;
+    r.ipp = o.cam.inches / dH; r.scaleFrom = 'horizon'; r.method = 'horizon'; r.camIn = o.cam.inches;
+    r.scaleRel = Math.sqrt(Math.pow(o.cam.tol / o.cam.inches, 2) + 2 * Math.pow(2.8 / dH, 2));
+    if (o.imgH && dH < 0.06 * o.imgH) pushOnce(r.notes, 'The horizon is very close to her feet, so small click errors change the result a lot. This happens when the camera is low.');
+    if (r.total && p.crown && p.crown.y > hy) pushOnce(r.notes, 'The horizon is above the top of her head. That only happens if the camera is higher than her, so check the camera height you picked.');
+    var hs = headScale(p, o, r);
+    if (hs && r.total) r.altHeight = { inches: r.total * hs.ipp - (o.shoes || 0), from: hs.from };
+  } else {
+    if (wantHz) {
+      if (!p.sole) r.why.push('The horizon method needs her soles, and they were skipped.');
+      else if (hy != null && p.sole.y - hy <= 0) r.warnings.push('The horizon line has to sit above her feet. Tap "Eye-level line" in the list and redo it.');
+    }
+    var hs2 = headScale(p, o, r);
+    if (hs2) { r.ipp = hs2.ipp; r.scaleFrom = hs2.from; r.scaleRel = hs2.rel; }
   }
   if (!r.ipp) return;
 
@@ -763,19 +817,35 @@ function scaleAndHeight(p, o, r) {
     var bodyRel = r.total ? Math.pow(2.8 / r.total, 2) : 0;
     r.heightIn = hIn;
     r.heightErr = hIn * Math.sqrt(r.scaleRel * r.scaleRel + bodyRel + extra * extra);
-    r.quality = r.scaleFrom === 'ref' ? (r.heightHow === 'full' ? 'Measured' : 'Estimate') : 'Guess';
+    r.quality = r.scaleFrom === 'ref' ? (r.heightHow === 'full' ? 'Measured' : 'Estimate') : r.scaleFrom === 'horizon' ? 'Estimate' : 'Guess';
     if (r.ippEach && r.total) r.heightEach = r.ippEach.map(function (v) { return r.total * v - shoes; });
   }
 }
 
+// The head as a ruler (the backup when there is no reference object).
+function headScale(p, o, r) {
+  if (r.head) {
+    if (o.keisha) return { ipp: KEISHA_HEAD_IN / r.head, from: 'keisha', rel: 0.06 };
+    if (r.heads) {
+      // Real people: head size grows slowly with height, so more head-lengths means a taller person.
+      var est = AVG_WOMAN_IN * Math.pow(r.heads / (AVG_WOMAN_IN / HEAD_AVG_IN), 1 / 0.7);
+      return { ipp: est / r.total, from: 'adjusted', rel: 0.08 };
+    }
+    return { ipp: HEAD_AVG_IN / r.head, from: 'avghead', rel: 0.08 };
+  }
+  if (o.keisha && o.view !== 'side' && p.crotch && p.sole)
+    return { ipp: 0.47 * KEISHA_IN / (along(r.ax, p.sole) - along(r.ax, p.crotch)), from: 'keishaLegs', rel: 0.06 };
+  return null;
+}
+
 /* ================= Combining the front and side pictures ================= */
 function bridge(fr, sr) {
-  var rank = { ref: 3, keisha: 2, keishaLegs: 2, adjusted: 1, avghead: 1 };
+  var rank = { ref: 3, horizon: 2.5, keisha: 2, keishaLegs: 2, adjusted: 1, avghead: 1 };
   var fq = fr && fr.ipp ? rank[fr.scaleFrom] || 0 : 0, sq = sr && sr.ipp ? rank[sr.scaleFrom] || 0 : 0;
   var fi = fr && fr.ipp || null, si = sr && sr.ipp || null, canBridge = fr && sr && fr.head && sr.head;
   if (canBridge && fq > sq) { si = fi * fr.head / sr.head; sq = fq; }
   else if (canBridge && sq > fq) { fi = si * sr.head / fr.head; fq = sq; }
-  var best = Math.max(fq, sq), from = best === 3 ? 'ref' : best === 2 ? 'keisha' : best === 1 ? 'guess' : null;
+  var best = Math.max(fq, sq), from = best === 3 ? 'ref' : best === 2.5 ? 'horizon' : best === 2 ? 'keisha' : best === 1 ? 'guess' : null;
   return { fi: fi, si: si, from: from };
 }
 
@@ -926,7 +996,7 @@ function assProjWord(heads, buHeight) {
 }
 
 if (typeof module !== 'undefined') module.exports = {
-  TERMS: TERMS, REFS: REFS, STEPS: STEPS, CURVES: CURVES, BANDS: BANDS, refInches: refInches, compute: compute, bridge: bridge, sizes: sizes,
+  TERMS: TERMS, REFS: REFS, CAMS: CAMS, camInches: camInches, camById: camById, STEPS: STEPS, CURVES: CURVES, BANDS: BANDS, refInches: refInches, compute: compute, bridge: bridge, sizes: sizes,
   sliceVolume: sliceVolume, smoothPath: smoothPath, ellipseC: ellipseC, cupFor: cupFor, bandFor: bandFor, shoeFor: shoeFor,
   clothing: clothing, bodyType: bodyType, bodyShape: bodyShape, waistPhrase: waistPhrase, phraseFor: phraseFor, fmtFtIn: fmtFtIn,
   breastLengthWord: breastLengthWord, breastProjWord: breastProjWord, assProjWord: assProjWord, fullRankFor: fullRankFor, THIGH_CUTS: THIGH_CUTS, ARM_CUTS: ARM_CUTS, lenClassFor: lenClassFor, levelFor: levelFor
@@ -943,7 +1013,7 @@ if (typeof document !== 'undefined') (function () {
     limbs: false, face: false, turn: false, curves: false, grid: true, prev: null }, load('pc-settings-v5', {}));
   function newView() {
     return { img: null, name: 'picture', points: {}, skipped: {}, placed: [], curves: {}, pose: 'stand',
-      ref1: 'door', ref1n: 80, ref2on: false, ref2: 'counter', ref2n: 36, method: 'same', finder: false, shoes: 0,
+      ref1: 'door', ref1n: 80, ref2on: false, ref2: 'counter', ref2n: 36, method: 'same', finder: false, shoes: 0, horizon: false, cam: 'eye', camN: 62,
       zoom: 1, cx: 0, cy: 0 };
   }
   var V = { front: newView(), side: newView() }, cur = 'front';
@@ -957,6 +1027,10 @@ if (typeof document !== 'undefined') (function () {
     var a = refById(w.ref1).kind, b = w.ref2on ? refById(w.ref2).kind : 'any';
     return (!a || a === 'floor' || a === 'point') || (!b || b === 'floor' || b === 'point');
   }
+  function noRef1(w) { return !!refById(w.ref1).none; }
+  // Eye level is needed for "closer or farther" references, and for the horizon method.
+  function floorHz(w) { return w.pose !== 'lie' && w.method === 'floor' && floorRefChosen(w); }
+  function hzOn(w) { return w.pose !== 'lie' && !!w.horizon; }
   function groupOn(g, name) {
     var w = V[name], lying = w.pose === 'lie';
     switch (g) {
@@ -969,10 +1043,10 @@ if (typeof document !== 'undefined') (function () {
       case 'fh': return S.face;
       case 'an': return S.turn;
       case 'sf': return S.sizes || S.extras || S.limbs;
-      case 'r': return S.height;
+      case 'r': return S.height && !noRef1(w);
       case 'r2': return S.height && w.ref2on;
-      case 'z': return S.height && !lying && w.method === 'floor' && !w.finder && floorRefChosen(w);
-      case 'ze': return S.height && !lying && w.method === 'floor' && w.finder && floorRefChosen(w);
+      case 'z': return S.height && !lying && ((floorHz(w) && !w.finder) || (hzOn(w) && !(floorHz(w) && w.finder)));
+      case 'ze': return S.height && !lying && floorHz(w) && w.finder;
     }
     return false;
   }
@@ -993,7 +1067,8 @@ if (typeof document !== 'undefined') (function () {
       refs = [refInches(w.ref1, w.ref1n), w.ref2on ? refInches(w.ref2, w.ref2n) : undefined];
       names = [w.ref1, w.ref2on ? w.ref2 : null];
     }
-    return { view: name, lying: w.pose === 'lie', heightOn: true, refs: refs, refNames: names, method: w.method, finder: w.finder,
+    return { view: name, lying: w.pose === 'lie', heightOn: true, refs: refs, refNames: names, method: w.method, finder: floorHz(w) && w.finder,
+      horizon: S.height && hzOn(w), cam: S.height && hzOn(w) ? camInches(w.cam, w.camN) : null,
       shoes: w.shoes, keisha: S.keisha, turnFix: S.turn, imgH: w.img ? w.img.naturalHeight : 0 };
   }
   function results(name) { return compute(activePoints(name), optsFor(name)); }
@@ -1012,6 +1087,7 @@ if (typeof document !== 'undefined') (function () {
         hint: isTop ? 'One end of the ' + nm + '.' : 'The opposite end, along the same straight line.' };
       return { label: st.label + ' (' + nm + ')', hint: isTop ? (d.top || 'The top of the ' + nm + '.') : (d.bot || 'Where the ' + nm + ' meets the floor, straight below the top.') };
     }
+    if (st.key === 'hz' && hzOn(w) && !floorHz(w)) return { label: 'Horizon', hint: 'Click where the water or flat land meets the sky, anywhere across the picture. If it’s hidden behind her, click where it would be.' };
     return { label: st.label, hint: st.hint };
   }
 
@@ -1117,8 +1193,9 @@ if (typeof document !== 'undefined') (function () {
     if (S.height) {
       seg(p.r1Top, p.r1Bot, '#5fd0e0', lw * 2.5);
       seg(p.r2Top, p.r2Bot, '#7fe0a0', lw * 2.5);
-      if (w.pose !== 'lie' && w.method === 'floor' && floorRefChosen(w)) {
-        if (w.finder) {
+      if (floorHz(w) || hzOn(w)) {
+        var hzName = floorHz(w) ? 'eye level' : 'horizon';
+        if (floorHz(w) && w.finder) {
           [['e1a', 'e1b'], ['e2a', 'e2b']].forEach(function (pr) {
             var A = p[pr[0]], B = p[pr[1]]; if (!A || !B) return;
             var a2 = sc(A), b2 = sc(B), sg = clipLine(a2.x, a2.y, b2.x - a2.x, b2.y - a2.y, 0, 0, W, H);
@@ -1127,8 +1204,8 @@ if (typeof document !== 'undefined') (function () {
           });
           if (r.vp) { var vq = sc(r.vp); c.save(); c.fillStyle = '#5fd0e0'; c.beginPath(); c.arc(vq.x, vq.y, lw * 5, 0, Math.PI * 2); c.fill(); c.restore(); }
         }
-        if (r.hzY != null) hline(r.hzY, 'rgba(95,208,224,.95)', [lw * 6, lw * 3], 'eye level');
-        else if (!w.finder && !w.points.hz) hline(img.naturalHeight / 2, 'rgba(95,208,224,.45)', [lw * 2, lw * 4], 'eye level? click to set');
+        if (r.hzY != null) hline(r.hzY, 'rgba(95,208,224,.95)', [lw * 6, lw * 3], hzName);
+        else if (!(floorHz(w) && w.finder) && !w.points.hz) hline(img.naturalHeight / 2, 'rgba(95,208,224,.45)', [lw * 2, lw * 4], hzName + '? click to set');
       }
     }
     // Curves
@@ -1157,7 +1234,7 @@ if (typeof document !== 'undefined') (function () {
       c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = lw;
       c.beginPath(); c.arc(q.x, q.y, rad, 0, Math.PI * 2); c.fill(); c.stroke();
       c.fillStyle = '#fff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = lw * 2.5; c.lineJoin = 'round'; c.miterLimit = 2;
-      var txt = st.short || st.label, tw = c.measureText(txt).width;
+      var txt = st.key === 'hz' && hzOn(w) && !floorHz(w) ? 'Horizon' : st.short || st.label, tw = c.measureText(txt).width;
       var tx = /L$/.test(st.key) ? q.x - rad * 1.6 - tw : q.x + rad * 1.6;
       if (tx < 0) tx = q.x + rad * 1.6;
       if (tx + tw > W) tx = q.x - rad * 1.6 - tw;
@@ -1251,6 +1328,13 @@ if (typeof document !== 'undefined') (function () {
         how = 'Measured with ' + names.join(' + ') + (r.method === 'floor' ? ', using the eye-level line.' : r.method === 'lying' ? ', lying-down mode.' : '.');
         if (r.heightHow === 'legs') how = 'Her head is cut off, so this assumes her legs are 47% of her height. ' + how;
         if (r.heightHow === 'torso') how = 'Her feet are hidden, so this assumes crown to crotch is 53% of her height. ' + how;
+      } else if (r.scaleFrom === 'horizon') {
+        how = 'No reference object, so this uses the horizon and a camera height of ' + Math.round(r.camIn) + ' in. It assumes flat ground and a level camera (not tilted up or down).';
+        if (r.altHeight) {
+          var gap = (r.heightIn - r.altHeight.inches) / r.altHeight.inches, nm = r.altHeight.from === 'keisha' || r.altHeight.from === 'keishaLegs' ? 'Keisha’s spec head size' : 'her head';
+          how += ' The head ruler (' + nm + ') says ' + fmtFtIn(r.altHeight.inches) + (Math.abs(gap) <= 0.05 ? ', which agrees within ' + Math.max(1, Math.round(Math.abs(gap) * 100)) + '%.' :
+            ', ' + Math.round(Math.abs(gap) * 100) + '% ' + (gap > 0 ? 'shorter' : 'taller') + '. If they disagree a lot, the camera height is probably off, or the camera was tilted.');
+        }
       } else if (r.scaleFrom === 'keisha') how = 'No reference object, so this uses Keisha’s own head size (' + KEISHA_HEAD_IN.toFixed(1) + ' in, from her spec). It reads right when her head count is on spec.';
       else if (r.scaleFrom === 'keishaLegs') how = 'No reference and no head, so this uses Keisha’s spec crotch height (47% of 6′11″).';
       else if (r.scaleFrom === 'adjusted') how = 'No reference object, so this is a guess from her head count: real people with more head-lengths tend to be taller. Very tall characters can still read short.';
@@ -1265,13 +1349,15 @@ if (typeof document !== 'undefined') (function () {
       html += card('Height', '—', 'rough', !r.head && !(S.keisha && activePoints(name).crotch) ? 'Needs her crown and chin (the head is the backup ruler), or her soles plus a reference object.' :
         r.ipp && !r.total ? 'Needs both her crown and her soles in this picture.' : 'Not enough points yet.');
     }
-    if (S.height && r.scaleFrom !== 'ref' && r.why.length) html += msg('Why the reference isn’t used: ' + r.why.join(' '), 'warn');
+    if (S.height && r.scaleFrom !== 'ref' && r.why.length) html += msg('What’s missing: ' + r.why.join(' '), 'warn');
     return html;
   }
 
   function bestHeight(fr, sr) {
     if (fr.heightIn && fr.scaleFrom === 'ref') return fr.heightIn;
     if (sr.heightIn && sr.scaleFrom === 'ref') return sr.heightIn;
+    if (fr.heightIn && fr.scaleFrom === 'horizon') return fr.heightIn;
+    if (sr.heightIn && sr.scaleFrom === 'horizon') return sr.heightIn;
     return fr.heightIn || sr.heightIn || null;
   }
 
@@ -1303,7 +1389,7 @@ if (typeof document !== 'undefined') (function () {
     });
     var note = rows.length ? table(rows) : '';
     if (anyRange) note += msg('Ranges come from the front picture alone, which can’t see how deep her body is. Add a side picture for single numbers.', 'info');
-    if (z.from !== 'ref') note = msg('Rough: no reference object, so the ruler is ' + (z.from === 'keisha' ? 'Keisha’s spec head size' : 'a guess from her head') + '.', 'warn') + note;
+    if (z.from !== 'ref') note = msg('Rough: no reference object, so the ruler is ' + (z.from === 'horizon' ? 'the horizon and camera height' : z.from === 'keisha' ? 'Keisha’s spec head size' : 'a guess from her head') + '.', 'warn') + note;
     html += card('Bust, waist, hips', '', z.from !== 'ref' || anyRange ? 'rough' : '', note);
     // Bra
     if (z.cup) {
@@ -1467,6 +1553,7 @@ if (typeof document !== 'undefined') (function () {
     if (r.foot) rows.push(['Foot length', f(r.foot)]);
     if (!rows.length) return '';
     var src = r.scaleFrom === 'ref' ? '' : r.carried ? 'Ruler carried over from the other picture through her head length. ' :
+      r.scaleFrom === 'horizon' ? 'Rough: ruler is the horizon and camera height. ' :
       r.scaleFrom === 'keisha' || r.scaleFrom === 'keishaLegs' ? 'Ruler: Keisha’s spec. ' : 'Rough: ruler is a guess from her head. ';
     return card('In inches', '', r.scaleFrom === 'ref' ? '' : 'rough', (src ? msg(src, 'info') : '') + table(rows));
   }
@@ -1520,7 +1607,7 @@ if (typeof document !== 'undefined') (function () {
     curvesPanel();
 
     var fr = results('front'), sr = results('side'), r = cur === 'side' ? sr : fr, z = sizes(fr, sr);
-    if (!r.ipp) { var ci = cur === 'front' ? z.fi : z.si; if (ci) { r.ipp = ci; r.scaleFrom = z.from === 'ref' ? 'ref' : 'guess'; r.carried = true; } }
+    if (!r.ipp) { var ci = cur === 'front' ? z.fi : z.si; if (ci) { r.ipp = ci; r.scaleFrom = z.from === 'ref' ? 'ref' : z.from === 'horizon' ? 'horizon' : 'guess'; r.carried = true; } }
     var out = '';
     r.warnings.forEach(function (x) { out += msg(x, 'bad'); });
     r.notes.forEach(function (x) { out += msg(x, 'warn'); });
@@ -1594,15 +1681,17 @@ if (typeof document !== 'undefined') (function () {
   }
 
   /* ---------- controls <-> state ---------- */
-  function fillRefSelect(sel) {
+  function fillRefSelect(sel, noNone) {
     var html = '', g = null;
     REFS.forEach(function (d) {
+      if (noNone && d.none) return;
       if (d.g !== g) { if (g) html += '</optgroup>'; g = d.g; html += '<optgroup label="' + esc(g) + '">'; }
       html += '<option value="' + d.id + '">' + esc(d.name) + '</option>';
     });
     sel.innerHTML = html + '</optgroup>';
   }
-  fillRefSelect($('ref1')); fillRefSelect($('ref2'));
+  fillRefSelect($('ref1')); fillRefSelect($('ref2'), true);
+  $('cam').innerHTML = CAMS.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
   function setSeg(id) { Array.prototype.forEach.call($(id).querySelectorAll('label'), function (l) { l.classList.toggle('on', l.querySelector('input').checked); }); }
   var TOGGLES = [['optK', 'keisha'], ['optM', 'muscular'], ['optW', 'widths'], ['optH', 'height'], ['optS', 'sizes'], ['optB', 'breast'], ['optX', 'extras'],
     ['optL', 'limbs'], ['optF', 'face'], ['optT', 'turn'], ['optC', 'curves'], ['grid', 'grid']];
@@ -1622,6 +1711,9 @@ if (typeof document !== 'undefined') (function () {
     });
     document.querySelector('input[name=hm][value=' + w.method + ']').checked = true;
     $('methodBox').hidden = w.pose === 'lie' || !floorRefChosen(w);
+    $('hzBox').hidden = w.pose === 'lie';
+    $('hzon').checked = !!w.horizon; $('camWrap').hidden = !w.horizon; $('cam').hidden = !w.horizon; $('hzHint').hidden = !w.horizon;
+    $('cam').value = w.cam; $('camNWrap').hidden = !w.horizon || !camById(w.cam).custom; $('camN').value = w.camN;
     $('finderWrap').hidden = w.method !== 'floor';
     $('finder').checked = w.finder;
     $('shoes').value = String(w.shoes);
@@ -1655,6 +1747,9 @@ if (typeof document !== 'undefined') (function () {
   $('ref2on').addEventListener('change', function () { v().ref2on = this.checked; changed(); });
   Array.prototype.forEach.call(document.querySelectorAll('input[name=hm]'), function (el) { el.addEventListener('change', function () { v().method = this.value; changed(); }); });
   $('finder').addEventListener('change', function () { v().finder = this.checked; changed(); });
+  $('hzon').addEventListener('change', function () { v().horizon = this.checked; changed(); });
+  $('cam').addEventListener('change', function () { v().cam = this.value; changed(); });
+  $('camN').addEventListener('input', function () { v().camN = parseFloat(this.value) || 0; draw(); });
   $('shoes').addEventListener('change', function () { v().shoes = parseFloat(this.value) || 0; changed(); });
 
   /* ---------- placing points: press, magnifier, drag, pinch, wheel ---------- */
@@ -1777,7 +1872,7 @@ if (typeof document !== 'undefined') (function () {
     var name = cur, url = URL.createObjectURL(f), im = new Image();
     im.onload = function () {
       var keep = V[name], w = newView();
-      ['pose', 'ref1', 'ref1n', 'ref2on', 'ref2', 'ref2n', 'method', 'finder', 'shoes'].forEach(function (k) { w[k] = keep[k]; });
+      ['pose', 'ref1', 'ref1n', 'ref2on', 'ref2', 'ref2n', 'method', 'finder', 'shoes', 'horizon', 'cam', 'camN'].forEach(function (k) { w[k] = keep[k]; });
       w.img = im; w.name = (f.name || 'picture').replace(/\.[^.]+$/, '') || 'picture';
       V[name] = w; armed = null; selected = null; tracing = null;
       if (name !== cur) return;
