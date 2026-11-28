@@ -49,6 +49,13 @@
   .res.yellow { border-color: var(--yellow); } .res.yellow .val { color: var(--yellow); }
   .res.red { border-color: var(--red); } .res.red .val { color: var(--red); }
   .warn { color: var(--red); font-size: 13px; margin: 6px 0; }
+  .opts { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-bottom: 12px; font-size: 13px; background: #1b1c1f; }
+  .opts .row { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin: 4px 0; }
+  .opts b { color: var(--text); font-weight: 600; }
+  .opts label { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .opts select, .opts input[type=number] { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 13px; }
+  .opts input[type=number] { width: 70px; }
+  .opts .stack { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
   details { font-size: 13px; color: var(--muted); margin-top: 12px; }
   details summary { cursor: pointer; color: var(--text); }
   details ul { padding-left: 18px; margin: 6px 0; }
@@ -88,6 +95,26 @@
     </div>
   </div>
   <aside>
+    <div class="opts">
+      <div class="row"><b>Measure:</b>
+        <label><input type="checkbox" id="optW" checked> Widths</label>
+        <label><input type="checkbox" id="optH" checked> Real height</label>
+      </div>
+      <div id="hOpts">
+        <div class="row"><b>Reference object:</b>
+          <select id="refType">
+            <option value="80">Standard door (80 in)</option>
+            <option value="36">Kitchen counter (36 in)</option>
+            <option value="custom">Custom</option>
+          </select>
+          <label id="customWrap" hidden><input type="number" id="refCustom" min="1" step="0.5" value="80"> in</label>
+        </div>
+        <div class="row stack"><b>Where is it?</b>
+          <label><input type="radio" name="hm" value="same" checked> Right beside her (same distance from the camera)</label>
+          <label><input type="radio" name="hm" value="floor"> Closer or farther than her (uses the eye-level line)</label>
+        </div>
+      </div>
+    </div>
     <div id="next">Open a picture to start.</div>
     <ol id="steps"></ol>
     <div id="results"></div>
@@ -100,6 +127,9 @@
         <li>Chin means the bottom of the chin bone, not the soft fold under it.</li>
         <li>Widths use only left-to-right distance. Click the body outline, not her arms or hands.</li>
         <li>Heights use only up-and-down distance, so a slightly off-center click won't change them.</li>
+        <li>Real height needs an object of known size standing on the same floor, like a door frame. A picture alone can't show how tall someone is.</li>
+        <li>If the object is right beside her, use "Right beside her." If it's closer to or farther from the camera, use "Closer or farther" and click the eye-level line: where the far floor and ceiling lines would meet. In a level shot that's usually near the middle of the picture.</li>
+        <li>The eye-level method needs a level camera (not tilted up or down) and a flat floor under both her and the object.</li>
       </ul>
       <p>Green, yellow and red are tolerance bands set around the bible's numbers. Green is on target, yellow is close enough to fix with a pass, red means pick a different picture.</p>
     </details>
@@ -118,7 +148,10 @@ var STEPS = [
   { key: 'waL',    label: 'Waist, left edge',     hint: 'Narrowest point between ribs and hips. No narrowing? Use navel level.', group: 'w' },
   { key: 'waR',    label: 'Waist, right edge',    hint: 'Same level on the other side.', group: 'w' },
   { key: 'hiL',    label: 'Hip, left edge',       hint: 'Widest point of the hips from the front. Body outline, not hands.', group: 'w' },
-  { key: 'hiR',    label: 'Hip, right edge',      hint: 'Widest point on the other side.', group: 'w' }
+  { key: 'hiR',    label: 'Hip, right edge',      hint: 'Widest point on the other side.', group: 'w' },
+  { key: 'refTop', label: 'Reference, top',       short: 'Ref top', hint: 'The top of the door frame or counter.', group: 'r' },
+  { key: 'refBot', label: 'Reference, bottom',    short: 'Ref bottom', hint: 'Where that object meets the floor.', group: 'r' },
+  { key: 'hz',     label: 'Eye-level line',       short: 'Eye level', hint: 'Where the far floor and ceiling lines would meet: the camera\'s eye level. In a level shot it is usually near the middle of the picture.', group: 'z' }
 ];
 
 // Target bands. Bible numbers: 8-8.5 heads, crotch 47% of height, hips 1.5x shoulders, waist 0.62x hips.
@@ -126,8 +159,15 @@ var BANDS = {
   heads:  { green: [8.0, 8.5],  yellow: [7.75, 8.75] },
   crotch: { green: [0.45, 0.49], yellow: [0.43, 0.51] },
   hipSh:  { green: [1.35, 1.65], yellow: [1.25, 1.75] },
-  waHi:   { green: [0.57, 0.67], yellow: [0.52, 0.72] }
+  waHi:   { green: [0.57, 0.67], yellow: [0.52, 0.72] },
+  height: { green: [82, 84],     yellow: [80, 86] }      // inches: 6'10" to 7'0"
 };
+
+function fmtFtIn(inches) {
+  var ft = Math.floor(inches / 12), i = Math.round(inches - ft * 12);
+  if (i === 12) { ft += 1; i = 0; }
+  return ft + '\u2032' + i + '\u2033';
+}
 
 function grade(v, band) {
   if (v >= band.green[0] && v <= band.green[1]) return 'green';
@@ -141,8 +181,10 @@ function width(p, a, b) {
   return w > 0 ? w : null;
 }
 
-function compute(p) {
-  var r = { warnings: [] };
+// opt: { heightOn, refIn, method: 'same' | 'floor', imgH }
+function compute(p, opt) {
+  opt = opt || {};
+  var r = { warnings: [], notes: [] };
   if (p.crown && p.chin) {
     r.head = p.chin.y - p.crown.y;
     if (r.head <= 0) { r.warnings.push('The chin is above the crown. Undo and click the crown first, then the chin.'); r.head = null; }
@@ -167,11 +209,37 @@ function compute(p) {
   var sh = width(p, 'shL', 'shR'), wa = width(p, 'waL', 'waR'), hi = width(p, 'hiL', 'hiR');
   if (sh && hi) r.hipSh = hi / sh;
   if (wa && hi) r.waHi = wa / hi;
+
+  // Real height from a reference object of known size.
+  if (opt.heightOn && opt.refIn > 0 && p.refTop && p.refBot && r.total) {
+    var refPx = p.refBot.y - p.refTop.y;
+    if (refPx <= 0) {
+      r.warnings.push('The reference bottom is above its top. Undo and click the top first, then where it meets the floor.');
+    } else if (opt.method === 'floor') {
+      if (p.hz) {
+        var dP = p.sole.y - p.hz.y, dR = p.refBot.y - p.hz.y;
+        if (dP <= 0 || dR <= 0) {
+          r.warnings.push('The eye-level line has to sit above both her feet and the bottom of the reference object.');
+        } else {
+          r.heightIn = opt.refIn * (r.total / dP) / (refPx / dR);
+          r.hMethod = 'floor';
+          if (opt.imgH && (dP < 0.06 * opt.imgH || dR < 0.06 * opt.imgH)) r.notes.push('The eye-level line is very close to the feet, so small click errors change the result a lot.');
+        }
+      }
+    } else {
+      r.heightIn = opt.refIn * r.total / refPx;
+      r.hMethod = 'same';
+      if (opt.imgH && Math.abs(p.refBot.y - p.sole.y) > 0.03 * opt.imgH) {
+        r.notes.push('The object\'s base is not level with her feet, so it may be closer or farther than her. If so, switch to "Closer or farther."');
+      }
+    }
+    if (r.heightIn && refPx < 0.15 * r.total) r.notes.push('The reference looks small next to her, so the height is less precise. Zoom in for those clicks.');
+  }
   return r;
 }
 
 
-if (typeof module !== 'undefined') module.exports = { STEPS: STEPS, BANDS: BANDS, grade: grade, compute: compute };
+if (typeof module !== 'undefined') module.exports = { STEPS: STEPS, BANDS: BANDS, grade: grade, compute: compute, fmtFtIn: fmtFtIn };
 
 /* ---------- Page ---------- */
 if (typeof document !== 'undefined') (function () {
@@ -179,8 +247,23 @@ if (typeof document !== 'undefined') (function () {
   var cv = $('cv'), ctx = cv.getContext('2d');
   var img = null, baseName = 'picture', fit = 1, zoom = 1, points = {}, placed = [], dragKey = null;
 
+  function method() { var m = document.querySelector('input[name=hm]:checked'); return m ? m.value : 'same'; }
+  function refIn() {
+    var v = $('refType').value;
+    if (v === 'custom') { var c = parseFloat($('refCustom').value); return c > 0 ? c : 0; }
+    return parseFloat(v);
+  }
+  function opts() {
+    return { heightOn: $('optH').checked, refIn: refIn(), method: method(), imgH: img ? img.naturalHeight : 0 };
+  }
+  function enabled(st) {
+    if (st.group === 'w') return $('optW').checked;
+    if (st.group === 'r') return $('optH').checked;
+    if (st.group === 'z') return $('optH').checked && method() === 'floor';
+    return true;
+  }
   function nextStep() {
-    for (var i = 0; i < STEPS.length; i++) if (!points[STEPS[i].key]) return STEPS[i];
+    for (var i = 0; i < STEPS.length; i++) if (enabled(STEPS[i]) && !points[STEPS[i].key]) return STEPS[i];
     return null;
   }
 
@@ -207,7 +290,7 @@ if (typeof document !== 'undefined') (function () {
   function render(c, s, lw, W, H, withLegend) {
     c.clearRect(0, 0, W, H);
     c.drawImage(img, 0, 0, W, H);
-    var r = compute(points);
+    var r = compute(points, opts());
     var font = Math.max(12, Math.round(lw * 6.5));
     c.font = '600 ' + font + 'px -apple-system, Helvetica, Arial, sans-serif';
     c.textBaseline = 'middle';
@@ -250,18 +333,27 @@ if (typeof document !== 'undefined') (function () {
         c.beginPath(); c.moveTo(a.x * s, y); c.lineTo(b.x * s, y); c.stroke(); c.restore();
       }
     });
+    // Reference object and eye-level line
+    if ($('optH').checked) {
+      if (points.refTop && points.refBot) {
+        c.save(); c.strokeStyle = '#5fd0e0'; c.lineWidth = lw * 2;
+        var rx = (points.refTop.x + points.refBot.x) / 2 * s;
+        c.beginPath(); c.moveTo(rx, points.refTop.y * s); c.lineTo(rx, points.refBot.y * s); c.stroke(); c.restore();
+      }
+      if (points.hz && method() === 'floor') hline(points.hz.y * s, 'rgba(95,208,224,.95)', [lw * 6, lw * 3], 'eye level', 'left');
+    }
     // Points
     STEPS.forEach(function (st) {
-      var p = points[st.key]; if (!p) return;
+      var p = points[st.key]; if (!p || !enabled(st)) return;
       var x = p.x * s, y = p.y * s, rad = lw * 4;
       c.save();
-      c.fillStyle = st.group === 'h' ? '#d9a066' : '#ffffff';
+      c.fillStyle = st.group === 'h' ? '#d9a066' : (st.group === 'w' ? '#ffffff' : '#5fd0e0');
       c.strokeStyle = '#000'; c.lineWidth = lw;
       c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.fill(); c.stroke();
       c.fillStyle = '#fff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = lw * 2.5;
       c.lineJoin = 'round'; c.miterLimit = 2;
       // Short labels on the picture; left-edge points label to the left so pairs don't overlap.
-      var txt = st.group === 'h' ? st.label : st.label.split(',')[0];
+      var txt = st.short || (st.group === 'h' ? st.label : st.label.split(',')[0]);
       var tw = c.measureText(txt).width;
       var leftSide = /L$/.test(st.key);
       var tx = leftSide ? x - rad * 1.6 - tw : x + rad * 1.6;
@@ -273,6 +365,7 @@ if (typeof document !== 'undefined') (function () {
     // Legend for saved file
     if (withLegend) {
       var lines = [];
+      if (r.heightIn) lines.push('Height: ' + fmtFtIn(r.heightIn) + ' (' + r.heightIn.toFixed(1) + ' in)  (target 6\u203210\u2033\u20137\u20320\u2033)');
       if (r.heads) lines.push('Head count: ' + r.heads.toFixed(2) + '  (target 8–8.5)');
       if (r.crotch != null) lines.push('Crotch: ' + (r.crotch * 100).toFixed(1) + '% of height  (target 47%)');
       if (r.hipSh) lines.push('Hips ÷ shoulders: ' + r.hipSh.toFixed(2) + '  (target 1.5)');
@@ -304,7 +397,7 @@ if (typeof document !== 'undefined') (function () {
     $('next').innerHTML = !img ? 'Open a picture to start.' :
       n ? 'Click: <b>' + n.label + '</b><small>' + n.hint + '</small>' :
       '<b>All points placed.</b><small>Drag any point to fine-tune it.</small>';
-    $('steps').innerHTML = STEPS.map(function (st) {
+    $('steps').innerHTML = STEPS.filter(enabled).map(function (st) {
       var cls = points[st.key] ? 'done' : (n && n.key === st.key ? 'current' : '');
       return '<li class="' + cls + '">' + st.label + (st.key === 'shL' ? ' <em>(widths optional)</em>' : '') + '</li>';
     }).join('');
@@ -312,9 +405,19 @@ if (typeof document !== 'undefined') (function () {
     $('reset').disabled = placed.length === 0;
     $('save').disabled = !img;
 
-    var r = compute(points), html = '';
+    var r = compute(points, opts()), html = '';
     r.warnings.forEach(function (w) { html += '<p class="warn">' + w + '</p>'; });
-    if (r.heads || r.crotch != null || r.hipSh || r.waHi) html += '<h2>Results</h2>';
+    if (r.heads || r.crotch != null || r.hipSh || r.waHi || r.heightIn) html += '<h2>Results</h2>';
+    if (r.heightIn) {
+      var gh = grade(r.heightIn, BANDS.height);
+      var hm = r.heightIn < BANDS.height.green[0] ? 'Reads shorter than her spec.' :
+               r.heightIn > BANDS.height.green[1] ? 'Reads taller than her spec.' : 'On target.';
+      var how = r.hMethod === 'floor' ? ' Measured with the eye-level line.' : ' Measured as if the object is beside her.';
+      html += resCard('Real height', fmtFtIn(r.heightIn), gh, r.heightIn.toFixed(1) + ' in. Target 6\u203210\u2033\u20137\u20320\u2033 (82\u201384 in). ' + hm + how);
+    } else if ($('optH').checked && img && points.crown && points.sole) {
+      html += '<p class="warn" style="color:var(--muted)">For real height, click the reference object\'s top and bottom' + (method() === 'floor' ? ', then the eye-level line.' : '.') + '</p>';
+    }
+    r.notes.forEach(function (n) { html += '<p class="warn" style="color:var(--yellow)">' + n + '</p>'; });
     if (r.heads) {
       var g = grade(r.heads, BANDS.heads);
       html += resCard('Head count', r.heads.toFixed(2), g,
@@ -356,6 +459,8 @@ if (typeof document !== 'undefined') (function () {
   function hitTest(pt) {
     var best = null, bestD = 14 / scale();
     Object.keys(points).forEach(function (k) {
+      var st = STEPS.filter(function (s) { return s.key === k; })[0];
+      if (st && !enabled(st)) return;
       var d = Math.hypot(points[k].x - pt.x, points[k].y - pt.y);
       if (d <= bestD) { best = k; bestD = d; }
     });
@@ -413,6 +518,13 @@ if (typeof document !== 'undefined') (function () {
     st.scrollTop = cy * cv.height - st.clientHeight / 2;
   });
   $('grid').addEventListener('change', draw);
+  function optsChanged() {
+    $('hOpts').hidden = !$('optH').checked;
+    $('customWrap').hidden = $('refType').value !== 'custom';
+    if (img) draw(); else updatePanel();
+  }
+  ['optW', 'optH', 'refType', 'refCustom'].forEach(function (id) { $(id).addEventListener('input', optsChanged); $(id).addEventListener('change', optsChanged); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=hm]'), function (el) { el.addEventListener('change', optsChanged); });
   window.addEventListener('resize', function () { if (img) { computeFit(); resize(); } });
 
   $('save').addEventListener('click', function () {
