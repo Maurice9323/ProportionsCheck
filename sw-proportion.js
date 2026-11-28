@@ -1,7 +1,7 @@
 // Service worker for proportion only.
 // Bump the number in VERSION to make phones drop the old cache right away.
 const PREFIX = 'proportion-';
-const VERSION = PREFIX + 'v4';
+const VERSION = PREFIX + 'v5';
 
 const ASSETS = [
   './',
