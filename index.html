@@ -41,8 +41,8 @@
   input[type=checkbox], input[type=radio] { accent-color: var(--gold); width: 16px; height: 16px; }
   input[type=range] { accent-color: var(--accent); }
   .layout { display: flex; align-items: flex-start; position: relative; z-index: 1; }
-  #stage { flex: 1 1 auto; min-width: 0; height: calc(100vh - 130px); overflow: auto; background: #030309; position: relative; }
-  #cv { display: block; margin: 0 auto; touch-action: none; cursor: crosshair; }
+  #stage { flex: 1 1 auto; min-width: 0; height: calc(100vh - 130px); overflow: hidden; background: #030309; position: relative; touch-action: none; }
+  #cv { display: block; touch-action: none; cursor: crosshair; position: absolute; left: 0; top: 0; }
   #empty { color: var(--text2); padding: 40px 24px; max-width: 540px; margin: 0 auto; }
   #empty p { margin-bottom: 10px; }
   #empty b { color: var(--gold); }
@@ -95,9 +95,18 @@
   @media (max-width: 860px) {
     .layout { flex-direction: column; }
     #stage, aside { height: auto; width: 100%; }
-    #stage { max-height: 70vh; min-height: 220px; }
+    #stage { height: 62vh; min-height: 260px; }
     aside { flex-basis: auto; border-left: 0; border-top: 1px solid var(--border); }
   }
+  .nudge { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+  .nudge .btn { min-width: 40px; justify-content: center; font-size: 1rem; }
+  .crow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: .9rem; }
+  .crow .btn { margin-left: 4px; }
+  ol#steps li { cursor: pointer; }
+  ol#steps li:hover { color: var(--gold); }
+  .note-y { color: var(--yellow); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+  .res small { font-size: .8rem; color: var(--text2); font-weight: 500; }
 </style>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw-proportion.js');</script>
 </head>
@@ -111,7 +120,10 @@
   <label class="btn btn-gold">Open picture<input type="file" id="file" accept="image/*"></label>
   <button class="btn" id="undo" disabled>Undo</button>
   <button class="btn" id="reset" disabled>Clear points</button>
-  <label class="inl">Zoom <input type="range" id="zoom" min="1" max="4" step="0.25" value="1"> <span id="zoomVal">1×</span></label>
+  <button class="btn" id="removePic" disabled>Remove picture</button>
+  <button class="btn" id="startOver">Start over</button>
+  <button class="btn" id="fitBtn" disabled>Fit</button>
+  <label class="inl">Zoom <input type="range" id="zoom" min="1" max="16" step="0.25" value="1"> <span id="zoomVal">1×</span></label>
   <label class="inl"><input type="checkbox" id="grid" checked> Head grid</label>
   <button class="btn" id="save" disabled>Save marked-up picture</button>
 </div>
@@ -126,14 +138,24 @@
     <div class="card">
       <div class="sec">Mode</div>
       <div class="row"><label><input type="checkbox" id="optK" checked> Keisha mode</label><span class="hint" id="kHint"></span></div>
+      <div class="row"><label><input type="checkbox" id="optM"> Muscular (tips a solid build to Chunky)</label></div>
       <div class="row">
         <span class="seg" id="segView"><label><input type="radio" name="view" value="front" checked>Front</label><label><input type="radio" name="view" value="side">Side</label></span>
         <span class="seg" id="segPose"><label><input type="radio" name="pose" value="stand" checked>Standing</label><label><input type="radio" name="pose" value="lie">Lying</label></span>
       </div>
       <div class="sub">
         <div class="sec">Measure</div>
-        <div class="row"><label><input type="checkbox" id="optW" checked> Widths</label><label><input type="checkbox" id="optH" checked> Real height</label></div>
-        <div class="row"><label><input type="checkbox" id="optS"> Sizes</label><label><input type="checkbox" id="optX"> Extra checks</label></div>
+        <div class="grid2">
+          <label><input type="checkbox" id="optW" checked> Widths</label>
+          <label><input type="checkbox" id="optH" checked> Height ruler</label>
+          <label><input type="checkbox" id="optS"> Sizes</label>
+          <label><input type="checkbox" id="optB"> Breast detail</label>
+          <label><input type="checkbox" id="optX"> Extra checks</label>
+          <label><input type="checkbox" id="optL"> Arms and legs</label>
+          <label><input type="checkbox" id="optF"> Face and hands</label>
+          <label><input type="checkbox" id="optT"> Turn angle</label>
+          <label><input type="checkbox" id="optC"> Curves and volume</label>
+        </div>
       </div>
       <div class="sub" id="hOpts">
         <div class="sec">Height ruler</div>
@@ -154,19 +176,19 @@
           <label id="finderWrap"><input type="checkbox" id="finder"> Find eye level for me (from two edge lines)</label>
         </div>
         <div class="row"><label>Footwear <select id="shoes"><option value="0">Barefoot</option><option value="1">Flat shoes (−1 in)</option><option value="3">Heels (−3 in)</option></select></label></div>
-        <div class="row"><label><input type="checkbox" id="headGuess"> No reference? Rough guess from her head</label></div>
       </div>
     </div>
 
     <div id="next">Open a picture to start.</div>
+
+    <div class="card" id="curvesBox" hidden>
+      <div class="sec">Curves</div>
+      <div class="hint">Tap Trace, then tap points along the edge on the picture. Tap Done when finished. Drag any curve point to adjust it.</div>
+      <div id="curvesList"></div>
+    </div>
+
     <ol id="steps"></ol>
     <div id="results"></div>
-
-    <div class="card">
-      <div class="sec">Saved readings</div>
-      <div id="readings" class="hint">None yet. Save a reading from each picture of the same character to average them.</div>
-      <div class="nextbtns"><button class="btn small btn-gold" id="saveReading" disabled>Save this reading</button><button class="btn small" id="clearReadings">Clear</button></div>
-    </div>
 
     <details id="kTargets">
       <summary>What Keisha mode grades against</summary>
@@ -175,6 +197,7 @@
         <li>Hips ÷ shoulders about 1.5. Waist ÷ hips about 0.62.</li>
         <li>Side view: breasts 0.1–0.5 heads past her belly; belly hangs 0.3–0.8 heads below the navel; butt 0.6+ heads past her upper back; lowest point of the breasts within 0.3 heads of the navel.</li>
         <li>Extra checks: navel 3 heads down; knee 2 heads up; wrist at crotch level; hand about face length; neck 0.75–1.0 of head width; head 0.28–0.38 of shoulder width; foot about 1.2 heads.</li>
+        <li>With no reference object, Keisha mode uses her spec head size (6′11″ ÷ 8.25 heads) as the ruler.</li>
         <li>Height is shown as a note only. It is never graded.</li>
       </ul>
     </details>
@@ -182,16 +205,16 @@
     <details>
       <summary>How to get a fair reading</summary>
       <ul>
-        <li>Straight-on, full-body shots measure best. A low camera makes legs look longer; a high camera makes them shorter. A close, wide shot makes whatever is nearest the camera look bigger.</li>
-        <li>She stands straight with feet flat. No bent knees, no leaning. Set Footwear if she has shoes on.</li>
-        <li>Crown means the top of her skull. Ignore the bun and hair volume. Chin means the bottom of the chin bone.</li>
-        <li>Turned at an angle? Heights still work up to about 30°. Uncheck Widths past about 15°, because some of her side shows and widths read too wide.</li>
-        <li>Can't see a point (cropped, hidden by a counter, in the sand)? Press "Skip this point". Results that need it just won't show.</li>
-        <li>Real height needs something of known size standing on the same floor. Without one, the picture alone can't show how tall she is.</li>
-        <li>Two references are better than one: if they disagree, the AI drew one of them at the wrong size.</li>
-        <li>Eye level is the height of the camera, drawn as a flat line across the picture. On a beach it's where the water meets the sky. Indoors, edges that run away from you (floor tiles, ceiling, counter edges) slant toward each other; the height where they'd meet is eye level. "Find eye level for me" does that math from two edges.</li>
-        <li>Lying down: measure only when the camera looks straight down at her or straight from the side. A mattress length makes a good ruler.</li>
-        <li>Sizes from a front picture alone are shown as a range. Add a side picture of the same character for single numbers, cup size and shoe size.</li>
+        <li>Press on the picture and slide: the magnifier shows exactly where the point will land. Lift to drop it. The last point you placed has a gold ring: fine-tune it with the nudge arrows (arrow keys on a Mac; Shift for bigger steps). To redo any point, tap it in the list. Once every point is placed, you can also drag points.</li>
+        <li>Pinch, or use the zoom slider, to zoom up to 16×. Two-finger drag (or trackpad scroll) moves around. Fit resets.</li>
+        <li>Tap any item in the list to redo it, even one you skipped.</li>
+        <li>Straight-on, full-body shots measure best. A close, wide shot makes whatever is nearest the camera look bigger.</li>
+        <li>Crown means the top of her skull, not the bun. Chin means the bottom of the chin bone.</li>
+        <li>Turned at an angle? Turn on Turn angle and click her face edges and nose tip. Widths get corrected. Past about 45°, widths can't be trusted.</li>
+        <li>Real height needs something of known size. Two references are better than one: if they disagree, the AI drew one at the wrong size. Small things (phone, can, card) are for close-ups.</li>
+        <li>Eye level is the height of the camera. On a beach it's where the water meets the sky. Indoors, "Find eye level for me" works it out from two edges that run away from you.</li>
+        <li>Lying down: measure only when the camera looks straight down at her or straight from the side.</li>
+        <li>Sizes from a front picture alone are ranges. Add a side picture of the same character for single numbers, cup size, volumes and shoe size.</li>
         <li>Clothes add width. Measure sizes on fitted clothing or none.</li>
         <li>"Save marked-up picture" saves to Files (Downloads) on iPhone, not to Photos.</li>
       </ul>
@@ -200,97 +223,184 @@
 </div>
 
 <script>
-/* ================= Pure math (no page access) ================= */
-var HEAD_AVG_IN = 8.8;   // average adult head, crown to chin
+var TERMS = {"body":["Thin","Slim","Petite","Slim Thick","Average","Mid Size","Mid Thick","Thick","Thicker","Thickest","Chubby","Meatball","Chunky","Curvy","Upside Down Triangle","BBW","SSBBW","USSBBW"],"waist_thin":["torso runs flat from ribcage to hip, no measurable narrowing","waist and hip width nearly equal, frame reads as one column","waist sits fractionally inward, curve barely registers","slight inward pull at the midsection, hip width edges past by a few inches","waist narrows softly, hip flare begins to separate from the midline","defined inward curve at the waist, hips extend several inches wider on each side","waist draws in clearly, hip span noticeably wider — negative space between reads","narrow waist, hips spread considerably beyond on both sides","waist circumference tight and narrow, hip width extends far enough to dwarf the midsection","waist tapers to a narrow band, hips flare wide and full, ratio sharp","waist spans fine and narrow, hip breadth extends dramatically wider on both sides","waist at narrowest, hips at fullest — span between the two measurements pronounced on a slim frame"],"waist_mid":["mass distributes evenly through the midsection, waist and hip width nearly level","soft midsection, low contrast between waist circumference and hip span","waist sits marginally inward, hip width extends a few inches past","waist and hips in close proportion, figure reads balanced and full","waist narrows enough to break from the hip line, separation beginning to read","waist pulls inward with clear definition, hip span widens noticeably from that point","substantial hip width paired with a waist that narrows back considerably","waist circumference drops deep, figure spreads back out significantly below","wide hip span sits in stark proportion to a waist pulled in tight","heavy hip breadth extends wide, waist narrows sharply — contrast between measurements pronounced","waist tapers to a tight circumference, hip shelf spreads wide and heavy on either side","waist narrows tight, hips carry full and wide — span difference between the two dominant on a thick frame"],"waist_plus":["waist and hip width nearly indistinct, soft mass distributes evenly with no measurable narrowing","soft heavy midsection, low contrast between waist and hip circumference, figure reads full and round","belly pushes forward, waist reads level with hip width from the front","full midsection with a soft taper beneath the mass, waist sits inward by a few inches","mild inward narrowing at the waist, hip span edges past the surrounding softness","waist and hips read as distinct measurements, soft definition present through the fullness","waist narrows inward on a full frame, hourglass proportion emerging beneath the mass","waist pulls inward measurably, hip width extends clearly beyond on a heavy frame","wide heavy hip span, waist narrows back considerably from that width","hip breadth spreads full and wide, waist tapers against it","waist narrows sharply on a heavy frame, hips extend wide on both sides","waist tapers deep, hips carry wide and heavy — span differential pronounced on a plus frame","upper body reads wider than hips, waist and hip circumference nearly equal, mass concentrated above","waist reads wider than hips from the front, apple distribution, lateral spread dominant"],"waist_bbw":["mass sits full and even through the midsection, waist and hip width nearly indistinct","soft heavy midsection distributed broadly, no measurable narrowing at the waist","belly volume pushes forward, waist circumference widens and reads level with hip width from the front","full midsection with a soft taper underneath — waist sits inward by a few inches beneath the weight","mild inward narrowing at the waist, hip span edges past despite the surrounding mass","waist and hip begin to read as distinct measurements, soft definition present through the fullness","midsection narrows inward on a full frame, hourglass proportion building beneath the mass","waist pulls inward measurably, hip width extends clearly beyond on a substantial frame","wide heavy hip span with a waist that narrows back considerably behind","hip breadth spreads wide and full, waist circumference tapers hard against that width","waist narrows sharply on a full heavy frame, hip mass extending wide on both sides of the taper","waist tapers deep, hips carry wide and heavy — span differential between the two pronounced on a fat frame"],"cup_size":["A","B","C","D","DD","DDD","E","F","G","H","I","J","K","L","M","N+"],"breast_length":["Compact — sits flush to the chest, no real length","Short — minimal length, tight and contained","Short-Moderate — a little length, still mostly contained","Moderate — average length, clearly present","Moderate-Long — leaning elongated, projects or hangs a bit","Long — distinctly elongated, hangs or juts a good distance","Very Long — dramatic length, hangs low or projects far","Extreme — maximal length, extends dramatically down or out","Tapered — elongated but narrowing toward the tip"],"breast_position":["High on chest — sit near the collarbone, well above where average sits","Average height — sit where expected for the body","Low on chest — sit noticeably below where expected","Close set — minimal gap between them","Average spacing — normal separation","Wide set — significant chest visible between them","Symmastia — no gap, tissue connects across sternum","Level — both sit at the same height","Uneven — one sits noticeably higher than the other"],"breast_projection":["Flat — almost no projection, barely rises from the chest","Minimal — slight projection, noticeable but modest","Moderate — average projection, proportionate to size","Full — significant projection, clearly extends outward","High — dramatic forward projection, extends well past average for size","Extreme — maximum projection, almost defies gravity","Wide rather than deep — spreads laterally, minimal forward projection","Deep rather than wide — narrow from front but projects significantly forward"],"nipple_placement":["Forward facing — points straight ahead, centered on the breast","Upward pointing — nipple angles toward the ceiling","Downward pointing — nipple angles toward the floor","Outward pointing — each nipple points away from center, east-west","Inward pointing — both nipples angle slightly toward each other","Centered on breast — sits exactly in the middle of the breast mass","Sits high on breast — nipple positioned in the upper half","Sits low on breast — nipple positioned in the lower half, points downward","Asymmetrical — each nipple points in a different direction from the other","Pulled outward — nipple sits off-center, dragged toward the outer edge","At the fold — nipple sits right at the natural breast fold, significant droop","Below the fold — nipple sits below the breast fold, points toward the floor","Extreme outer placement — nipple positioned at the very outer edge, almost on the side","Off-center — nipple sits noticeably to one side of center on the breast","Upward and outward — diagonal, angles up and away from center","Downward and outward — diagonal, angles down and away","Widely spaced — nipples unusually far apart relative to breast size","Splayed — each nipple points in a completely different direction","Upward and inward — diagonal, angles up and toward center","Downward and inward — diagonal, angles down and toward center","Closely spaced — nipples unusually close together relative to breast size","Hooded — areola droops slightly over the nipple, partially covers it"],"ass_projection":["Deep set — recessed, sits close to the body","Tucked — tucks under rather than projects outward","Dropped — sits low on the body","Minimal projection — barely extends outward","Moderate projection — average outward extension","Shelf — sits high, projects straight back, distinct ledge","Booty shelf — flat on top, strong outward projection below","High and tight — sits high, firm, compact projection","Perky — sits high regardless of size, defies gravity","Brazilian — high-set, full, round, lifted projection","Mounted — sits so high it looks placed on the lower back","Gravity defying — high and full with zero sag, almost unnatural","Wide rather than deep — spreads laterally, minimal outward projection","Deep rather than wide — projects significantly forward, narrow side to side"],"thigh_thickness_thin":["Very thin and long — barely any mass, femur line visible at the outer thigh, long proportion from hip to knee","Very thin and average length — bone structure visible at the knee, skin close to the surface, no softness","Very thin and short — compact with almost no mass, knee joints prominent, very little distance hip to knee","Slim and long — slender and extended, clean line from hip to knee, minimal fat throughout","Slim and average length — lean and proportionate, little fat or muscle bulk, tapers cleanly toward the knee","Slim and short — compact slim thigh, short hip-to-knee span, clean narrow line","Slim with unexpected length — thighs read slim but leg proportion is long, creates an elongated lean look","Lean with faint muscle definition — quadricep or hamstring line faintly visible, still clearly thin","Slim with wider hip set — thighs themselves are slim but pelvis width creates space between them","Very narrow throughout — no point of the thigh has real mass, same narrow width top to bottom","Lean but soft surface — slim overall with a light layer of softness over the bone, no real mass","Slim upper thigh tapering to almost nothing at the knee — taper is extreme, knee reads very narrow","Average length with barely-there mass — proportionate length but almost no circumference at any point","Short and fine-boned — short compact thigh with a delicate bone structure, minimal circumference"],"thigh_thickness_mid":["Full and long — noticeable thickness over an extended length, fills jeans through the full span","Full and average length — proportionate and present, fills clothes noticeably, nothing extreme","Full and short — compact with real mass, thigh width concentrated in a shorter hip-to-knee distance","Average and long — unremarkable thickness but extended length, legs read longer than average","Average and short — proportionate mass in a compact span, slightly wider-looking relative to their length","Slightly full and average length — just past average, beginning to press at the inner thigh","Thick and long — substantial mass over a long span, prominent presence from hip to knee","Thick and average length — clearly thick, significant presence, curves outward at the widest point","Thick and short — compact but very present, wide relative to their length","Tapered and full, average length — fuller at the top near the hip, narrows toward the knee meaningfully","Tapered and full, long — same taper over a longer span, widest at the outer upper thigh","Even fullness top to bottom, average length — same width from hip to knee, no real taper","Full with wider hip set — thighs are full but pelvis width adds additional visual space between them","Short and compact with even fullness — short span with mass evenly distributed throughout"],"thigh_thickness_plus":["Very thick and long — enormous mass over an extended span, thighs dominate the lower body silhouette","Very thick and average length — very full from top to bottom, significant circumference throughout","Very thick and short — enormous mass in a short hip-to-knee distance, reads very wide","Thick and long — substantial and extended, inner thighs press with consistent contact along the full length","Thick and average length — heavy and prominent, inner thighs press, outer thighs curve wide","Thick and short — compact and very heavy, wide relative to their length, inner contact constant","Disproportionate and long — much thicker than the rest of the body would suggest, elongated heavy mass","Disproportionate and average length — thighs significantly wider than the torso implies, very striking","Disproportionate and short — enormous relative to their length, mass sits wide and low","Heavy outer thigh dominant, long — most mass on the outer thigh, saddlebag hangs past the hip line","Heavy outer thigh dominant, average length — outer thigh mass is the widest point, curves outward noticeably","Cylindrical and very thick, average length — same heavy width from hip to knee, no taper at all","Heavy and tapered, average length — tapers from a very wide upper thigh toward the knee but stays heavy throughout","Short and enormously wide — very short hip-to-knee distance but enormous width, reads almost square"],"thigh_thickness_bbw":["Enormously thick and long — massive thighs that dominate the full leg length, inner overlap heavy and constant","Enormously thick and average length — enormous circumference, inner thighs press with real weight, outer thighs flare wide","Enormously thick and short — massive mass in a short span, thighs read as one wide continuous mass","Very thick and long — very heavy over a long span, inner overlap significant, outer thighs curve widely","Very thick and average length — very heavy, inner thighs press constantly, outer thigh curve significant","Very thick and short — very heavy and compact, inner overlap severe, outer mass extends significantly","Disproportionate and long — thighs vastly wider than any other body proportion, elongated and dominant","Disproportionate and average length — thighs so wide they significantly alter the full body silhouette","Disproportionate and short — enormous and compact, almost as wide as they are long","Outer thigh mass hanging, long — outer thigh fat hangs and shifts with movement, very visible from the front","Outer thigh mass hanging, average length — heavy outer tissue hangs and moves, inner overlap constant","Cylindrical and enormous, average length — no taper at all, one continuous heavy column from hip to knee","Heavy saddlebag dominant, long — outer thigh mass hangs past the hip silhouette along the full length","Heavy and even, short — enormous mass evenly distributed in a short compact span, very wide"],"legs_thin":["Long legs, straight and even, slim thighs that do not touch, shin bone visible under the skin, slim defined ankles","Average length legs, slim calves with some muscle definition, small gap between the thighs, ankles clean and narrow","Short legs relative to the torso, calves small and compact, thighs slim and close but not touching, ankles delicate","Long legs with visible veins running down the shin and inner calf, thighs narrow with a clear gap, ankles bony and defined","Slim legs throughout, calves barely present, ankles and calves nearly the same width, cankle tendency despite the overall thinness","Bow-legged, thighs curving outward at the knee, gap between the knees even when feet are together, calves slim","Knock-kneed, knees angle inward, calves slim, ankles close together, legs look longest from behind","Long slim legs with defined calf muscle, veins faintly visible on the inner thigh and shin, thigh gap clear and consistent","Very slim legs, thighs almost no contact, knees bony and prominent, shin runs sharp from knee to ankle, barely any calf","Slim with soft calves, no visible muscle definition, thighs graze each other at the very top only, ankles slim and clean","Average length, calves slightly fuller than expected on a thin frame, veins visible on the back of the knee, thigh gap present","Long legs, calves defined and athletic, ankles slim, inner thighs have the faintest shadow of contact at the very top","Short compact legs, slim throughout, calves round and small, thighs do not touch, ankles neat and proportionate","Very long legs, disproportionate to the torso, calves slim, thigh gap wide and consistent, shin bone angular and visible"],"legs_mid":["Average length legs, calves full and soft with no real muscle definition, thighs touch at the top with a slight gap below the knee","Long legs with some fullness through the thigh, calves round and feminine, slight inner thigh contact, ankles defined","Short legs, thighs full and close, calves thick and round, ankles slightly heavy, inner thighs touch top to mid","Calves are the most developed part — defined and muscular relative to the rest of the leg, thighs touch at the top, slim ankles","Full thighs with inner contact from top to mid, calves soft and round, ankles average, slight darkening at the inner thigh","Average legs with a noticeable outer thigh curve, calves soft, thighs touch through the middle, knees have a soft pad","Bow-legged through the knee, thighs still full and touch at the top, calves wide and round, ankles average","Long legs with full rounded thighs, inner thighs press together when standing, calves soft and full, ankles defined","Slim through the calf but full through the thigh, pronounced contrast between upper and lower leg, inner thighs touch at top","Average length with even fullness top to bottom, no real taper, calves and thighs both round, inner thighs touch throughout","Full calves with some cankle tendency, thighs touch through the middle, knees padded, slight inner thigh darkening","Short full legs, thighs press together, calves wide and round, ankles thick, skin smooth throughout","Average legs with prominent inner thigh darkness from friction, calves soft, full contact inner thigh, knees dimpled","Long legs, calves defined, thighs full with visible outer curve, inner thighs touch at top and mid, ankles slim despite leg fullness"],"legs_plus":["Full heavy thighs with continuous inner contact from top to knee, outer thighs curve wide, calves thick and round, ankles defined despite the fullness above","Thick legs throughout, inner thighs press and overlap, calves wide with some cankle, skin shows friction darkening at the inner thigh","Long full legs, thighs heavy and wide, inner contact heavy and consistent, under-thigh crease visible from the front when seated, calves full","Heavy thighs that flare wide at the outer edge, inner thighs rub with movement, calves thick, ankles average, skin has some dimpling at the outer thigh","Bow-legged with heavy thighs, thighs press together despite the bow, calves thick and round, varicose veins beginning to show on the inner calf","Short heavy legs, thighs press together from hip to knee, under-thigh crease visible from front, calves full, ankles thick with minimal definition","Thick calves with significant cankle, thighs heavy and pressing, ankles and calves blend together, inner thigh darkness from constant friction","Long legs with most of the mass in the thigh, calves comparatively slim, inner thighs press with heavy contact, outer thigh has a soft saddlebag overhang","Full even legs, thighs and calves both heavy, inner thigh overlap significant, outer thigh rounds wide, ankles thick, skin smooth throughout","Thighs very heavy relative to the rest, inner contact from hip to knee, calves soft and full, dimpling at the back of the thigh, slight varicose veins","Average length, mass concentrated in the lower thigh and inner knee area, calves wide and soft, heavy inner thigh contact, knees deeply padded","Full thighs with stretch marks on the inner and outer surface, inner contact continuous, calves round and full, ankles slightly swollen by evening","Heavy outer thighs that hang slightly past the silhouette, inner thighs overlap and chafe, calves full, cellulite visible on the back of the thigh","Very full legs with prominent inner thigh darkness and texture from friction, under-thigh crease visible from the front, calves thick, varicose veins visible on the inner calf and behind the knee"],"legs_bbw":["Very heavy thighs that press and overlap significantly, inner thigh chafing marks deep and dark, calves full and wide, ankles thick with minimal definition, skin shows dimpling throughout","Enormous thighs that touch continuously from hip to knee, under-thigh crease clearly visible from the front when standing, calves round and heavy, ankles blend into calves","Heavy legs with significant outer thigh overhang, mass extends past the hip silhouette, inner thighs press with real weight, calves thick, varicose veins visible on the calf and inner knee","Full and heavy throughout, thighs press with constant pressure, inner thigh skin darkened and textured from years of friction, calves wide and soft, ankles swollen by midday","Short heavy legs, thighs enormous relative to their length, inner contact from hip to below the knee, under-thigh crease folds forward when standing, calves very thick","Long heavy legs, most mass in the thighs and inner knee, calves comparatively slimmer, varicose veins running the length of the inner calf, ankles thick","Very thick calves with no ankle definition, thighs heavy and wide, the lower leg is one continuous column of mass from knee to foot, inner thigh darkness significant","Thighs so full they press together with real weight and friction, outer thigh mass hangs slightly, cellulite heavy on the back and inner surface, calves full, ankles thick","Bow-legged but thighs press together despite the curve, creating a distinctive silhouette, calves very round and wide, varicose veins prominent, inner thigh texture significant","Heavy legs with pronounced under-thigh crease visible from the front even when standing, inner overlap heavy, calves full, skin shows stretch marks on inner and outer thigh","Mass concentrated in the lower thigh and inner knee creating a teardrop silhouette, inner thighs press heavily, calves wide and soft, ankles barely defined","Full legs with heavy cellulite on the back of the thigh and outer surface, inner thigh overlap constant, under-thigh crease deep, calves full and round","Very heavy legs with skin that folds slightly at the inner knee from excess tissue, thighs press enormously, calves wide, varicose veins branching on the inner calf","Extremely full and heavy throughout, thighs press with significant weight, under-thigh crease folds forward visibly, cellulite covers the back and outer thigh, calves thick, ankles swollen"],"arms_thin":["Long and slim arms throughout, slight forearm muscle definition, veins visible on the inner forearm and back of the hand, wrist bones prominent, no elbow fold whatsoever","Slim arms with defined bicep on flex, soft at rest, forearms lean with faint veins, elbows sharp and bony, skin sits close to the bone throughout, no elbow fold","Very slim and fine-boned, upper arm has almost no mass, forearm tapers to a delicate wrist, veins prominent on the inner arm, elbows pointed and angular, no elbow fold","Average length, slim arms with soft upper arm, slight muscle visible on the forearm, wrist defined, elbows clean, skin smooth, no elbow fold at all","Slim but slightly softer than expected — upper arm has a gentle roundness, no real definition but firm, forearm lean, wrist slim, elbow clean with no fold","Athletic slim arms — defined shoulder cap, bicep line visible, forearm has visible tendon lines, wrist bones prominent, veins on the back of the hand, elbows clean and sharp","Long arms that carry length gracefully, thin throughout, skin has a slight papery translucence near the elbow and inner forearm, veins show clearly, no elbow fold","Short arms, slim and fine, upper arm almost no mass, forearm matches, wrist narrow, elbows small and bony, veins faint but present on the inner wrist","Slim arms with prominent shoulder definition — deltoid cap visible — upper arm lean, forearm slightly more developed, wrist defined, no elbow fold","Fine arms with a slight softness at the upper arm only — everything else is lean — forearm veins visible, wrist slim, elbow clean, the skin at the elbow barely tucks when the arm extends","Very long and fine, arms that seem to extend beyond normal proportion, all lean, veins present throughout the inner arm, elbows sharp, no fold, wrist bones prominent","Slim arms with forearm muscle that shows clearly, bicep has a slight shape, veins on the forearm and inner elbow, wrist defined, elbows sharp, skin smooth and close to the muscle","Slim upper arm with slightly fuller forearm, a small but defined forearm muscle, veins visible on the back of the hand and wrist, elbow sharp, absolutely no fold","Slim throughout with noticeable vein structure — inner arm, forearm, back of hand all show veins clearly — elbows angular and bony, wrist narrow, no elbow fold, arms look lean and slightly prominent-boned"],"arms_mid":["Average arms, slight softness at the upper arm, forearm has some definition, veins faint on the inner forearm, wrist average, elbow clean — no fold but a very slight skin tuck when fully extended","Soft upper arm with no visible definition, forearm softer too, wrist average, elbows have a barely-there skin tuck when the arm is straightened — not a fold, just a soft gather","Full upper arm with a gentle roundness, forearm softer, some visible forearm vein when the fist is clenched, wrist average, a soft pocket of skin tucks just past the elbow when the arm extends","Average length, defined through the forearm and wrist, upper arm soft, a small skin gather at the elbow when the arm hangs — present but subtle, wrist clean","Slightly full upper arm with some softness, forearm average, wrist somewhat defined, the skin at the elbow tucks into a soft fold when the arm is down — noticeable but small","Athletic upper arm with some muscle definition, forearm developed with visible veins on effort, wrist defined, elbow clean and sharp, no fold, shoulder has a slight cap definition","Full and soft throughout, upper arm round with no definition, forearm soft, wrist average, a consistent soft pocket of skin past the elbow that is present whether the arm is up or down","Average arms with a defined shoulder cap, upper arm soft below it, forearm average, faint veins at the inner elbow, a small soft fold at the elbow when the arm extends fully","Short arms, full upper arm, forearm softer, wrist slightly full, a soft skin tuck at the elbow — present when the arm is extended, disappears when raised","Long arms with an even softness throughout, no definition, wrist average, the skin at the elbow gathers into a noticeable soft pocket when the arm hangs at the side","Upper arm full with a slight underarm softness when the arm is raised — a gentle drape that disappears when the arm is down — forearm average, elbow has a small fold","Average arms, soft through the upper arm, forearm has slight definition, the skin past the elbow folds softly and consistently — always present, never dramatic","Full upper arm where the softness reads most at the inner upper arm, forearm average, wrist defined, a moderate skin fold at the elbow that moves slightly with arm motion","Soft all the way through — upper arm, forearm, wrist all carry an even softness — a consistent soft pocket past the elbow, slight underarm drape when raised, no definition anywhere"],"arms_plus":["Full heavy upper arm, soft throughout with no definition, forearm full but tapers slightly, wrist thick, a noticeable elbow fold — a clear pocket of skin and soft tissue that hangs past the elbow and shifts when the arm moves","Very full upper arm, bingo wing present and moves independently when the arm is raised or shaken, forearm full, wrist thick, deep elbow fold that drapes clearly past the elbow","Arms full and even from shoulder to wrist, no taper at all, the underarm drapes visibly when the arm is raised, a consistent heavy elbow fold present at all times","Heavy upper arm with significant bingo wing — the underarm tissue hangs and sways with movement — forearm full but less so, wrist thick, elbow fold deep and present","Full arms that sit away from the body when standing — the upper arm mass pushes the arm outward — forearm full, elbow fold noticeable and consistent, wrist carries fullness","Long heavy arms, upper arm very full, bingo wing present and pronounced, forearm tapers slightly, elbow fold deep and moves on its own, veins faint but visible beneath the fullness","Short full arms, upper arm mass dominant, bingo wing visible when the arm is raised, forearm full and matches, wrist thick, elbow fold heavy and layered","Arm mass concentrated in the upper arm, forearm comparatively slimmer creating a pronounced taper, wrist defined, bingo wing present, elbow fold deep — the fold drapes in a full pocket past the elbow","Full arms with stretch marks on the inner and outer upper arm from growth, bingo wing present and soft, forearm full, elbow fold noticeable, wrist thick","Heavy arms that carry most of their mass on the outer upper arm — the silhouette reads wide from the front — bingo wing present, elbow fold consistent and deep, forearm full","Full even arms with soft smooth skin, bingo wing present but sits close to the arm rather than swaying freely, forearm full, elbow fold a clear pocket, wrist carries fullness","Upper arm soft and heavy, bingo wing hangs and moves with any motion, forearm full, elbow fold deep and layered — a true cleavage at the elbow — wrist thick","Full arms with skin that stays smooth despite the size, bingo wing present and soft, forearm full, a very pronounced elbow fold — the skin drapes well past the elbow in a clear shelf, wrist thick","Very full arms throughout, bingo wing heavy and moves freely, forearm full, wrist thick, the elbow fold is deep and heavy — a pronounced pocket of soft skin and fat that hangs past the elbow and shifts independently with arm movement"],"arms_bbw":["Enormous upper arms, bingo wing massive and drapes heavily when the arm is raised or at rest, forearm very full, wrist thick, elbow fold deep and layered — a heavy shelf of soft tissue that extends clearly past the elbow and moves independently","Very heavy arms throughout, no taper from shoulder to wrist, arms hang away from the body significantly, bingo wing enormous and sways with walking, elbow fold a deep heavy crease that layers on itself","Upper arms so full they press against the torso at rest, bingo wing hangs heavily, forearm full, wrist thick, elbow fold pronounced — the skin and fat past the elbow forms a distinct pocket that is always visible","Heavy arms with significant stretch marks on the inner and outer upper arm, bingo wing present and heavy, forearm full, elbow fold deep with layered skin at the crease, wrist thick","Arms that carry enormous mass evenly — upper arm, forearm, wrist all equally full — bingo wing drapes heavily, elbow fold is a deep wide crease, the arm reads as one continuous column of soft mass","Very full upper arms where the bingo wing reaches past the elbow line when the arm is down, elbow fold dramatic and layered, forearm full, wrist thick, skin smooth despite the size","Heavy arms with the mass concentrated outward — from the front the arm silhouette is enormous — bingo wing heavy and moves on its own, elbow fold deep, forearm full, wrist thick","Long enormous arms, upper arm mass dominant, bingo wing massive, forearm full though slightly less than upper arm, elbow fold a heavy pronounced shelf, wrist thick, veins surprisingly visible beneath the fullness","Short heavy arms, upper arm enormous, everything compressed into a shorter length, bingo wing heavy and high, elbow fold deep and prominent, forearm very full, wrist thick","Very full arms with skin that drapes visibly at the underarm even at rest — the bingo wing is always present — elbow fold a heavy layered crease, forearm full, wrist thick, stretch marks on inner upper arm","Heavy upper arm with a bingo wing that swings freely with walking, the elbow fold is deep and wide — the skin past the elbow forms a heavy shelf that shifts clearly — forearm full, wrist very thick","Arms enormously full with soft smooth skin, bingo wing massive and soft, elbow fold deep and always present — a wide heavy pocket of skin and fat that layers at the crease — forearm full, wrist thick","Full heavy arms with significant inner upper arm softness, bingo wing hangs and moves, elbow fold deep and layered with a second fold visible just below the first on some positions, forearm full, wrist thick","The heaviest arm configuration — upper arms enormous, bingo wing massive and drapes far past the arm when raised, elbow fold deep and wide with multiple layers of soft skin, forearm very full, wrist thick, arms press heavily against the torso at rest and hang significantly away when standing"]};
 
+/* ================= Data ================= */
+var HEAD_AVG_IN = 8.8;              // average adult head, crown to chin
+var AVG_WOMAN_IN = 63.5;            // average US woman (CDC)
+var KEISHA_IN = 83, KEISHA_HEADS = 8.25, KEISHA_HEAD_IN = KEISHA_IN / KEISHA_HEADS;
+var TV_HEIGHT_PER_DIAG = 9 / Math.sqrt(16 * 16 + 9 * 9);   // 16:9 screen height per inch of diagonal
+
+// kind: floor = stands on the floor (default); point = a point at a known height above the floor;
+//       any = small object measured end to end in any direction, right beside her; len = mattress length (lying mode)
 var REFS = [
-  { id: 'door',   g: 'Walls and stairs', name: 'Door (80 in)', inches: 80, tol: 1 },
-  { id: 'switch', g: 'Walls and stairs', name: 'Light switch, center (48 in)', inches: 48, tol: 2, top: 'The middle of the light switch.', bot: 'The floor straight below the switch.' },
-  { id: 'outlet', g: 'Walls and stairs', name: 'Wall outlet, center (16 in)', inches: 16, tol: 3, top: 'The middle of the outlet.', bot: 'The floor straight below the outlet.' },
-  { id: 'rail',   g: 'Walls and stairs', name: 'Stair handrail (36 in)', inches: 36, tol: 2, top: 'The top of the handrail.', bot: 'The step straight below it.' },
-  { id: 'steps',  g: 'Walls and stairs', name: 'Stair steps (7.5 in each)', per: 7.5, tol: 0.25, count: true, top: 'The top edge of a higher step.', bot: 'The floor or step you are counting from, straight below.' },
-  { id: 'ceil8',  g: 'Walls and stairs', name: '8-ft ceiling (96 in), loose', inches: 96, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
-  { id: 'ceil9',  g: 'Walls and stairs', name: '9-ft ceiling (108 in), loose', inches: 108, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
-  { id: 'counter', g: 'Kitchen and dining', name: 'Kitchen counter (36 in)', inches: 36, tol: 1 },
-  { id: 'bar',    g: 'Kitchen and dining', name: 'Bar counter (42 in)', inches: 42, tol: 1 },
-  { id: 'table',  g: 'Kitchen and dining', name: 'Dining table (30 in)', inches: 30, tol: 1 },
-  { id: 'chair',  g: 'Kitchen and dining', name: 'Dining chair seat (18 in)', inches: 18, tol: 1, top: 'The top of the seat.' },
-  { id: 'cstool', g: 'Kitchen and dining', name: 'Counter stool seat (24 in)', inches: 24, tol: 1, top: 'The top of the seat.' },
-  { id: 'bstool', g: 'Kitchen and dining', name: 'Bar stool seat (30 in)', inches: 30, tol: 1, top: 'The top of the seat.' },
-  { id: 'vanity', g: 'Bathroom', name: 'Bathroom vanity (34.5 in)', inches: 34.5, tol: 1 },
-  { id: 'toilet', g: 'Bathroom', name: 'Toilet seat (17 in)', inches: 17, tol: 2, top: 'The top of the toilet seat.' },
-  { id: 'mtwin',  g: 'Bed (lying mode, mattress length)', name: 'Twin or full mattress (75 in long)', inches: 75, tol: 1, len: true },
-  { id: 'mqueen', g: 'Bed (lying mode, mattress length)', name: 'Queen or king mattress (80 in long)', inches: 80, tol: 1, len: true },
-  { id: 'mcal',   g: 'Bed (lying mode, mattress length)', name: 'California king mattress (84 in long)', inches: 84, tol: 1, len: true },
-  { id: 'hoop',   g: 'Outdoors and sports', name: 'Basketball rim (120 in)', inches: 120, tol: 0.5, top: 'The top of the rim.', bot: 'The ground straight below the rim.' },
-  { id: 'vbw',    g: 'Outdoors and sports', name: "Women's volleyball net (88.1 in)", inches: 88.125, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
-  { id: 'vbm',    g: 'Outdoors and sports', name: "Men's volleyball net (95.6 in)", inches: 95.625, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
-  { id: 'tennis', g: 'Outdoors and sports', name: 'Tennis net, center (36 in)', inches: 36, tol: 0.5, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
-  { id: 'woman',  g: 'People (loose)', name: 'Average US woman (63.5 in)', inches: 63.5, tol: 3, top: 'The top of her head.', bot: 'Her soles.' },
-  { id: 'man',    g: 'People (loose)', name: 'Average US man (68.9 in)', inches: 68.9, tol: 3, top: 'The top of his head.', bot: 'His soles.' },
-  { id: 'custom', g: 'Custom', name: 'Custom size', custom: true, tol: 0 }
+  { id: 'door',    g: 'Walls, doors, stairs', name: 'Door (80 in)', inches: 80, tol: 1 },
+  { id: 'handle',  g: 'Walls, doors, stairs', name: 'Door handle (36 in), loose', inches: 36, tol: 2, kind: 'point', top: 'The middle of the door handle.', bot: 'The floor straight below it.' },
+  { id: 'switch',  g: 'Walls, doors, stairs', name: 'Light switch, center (48 in)', inches: 48, tol: 2, kind: 'point', top: 'The middle of the light switch.', bot: 'The floor straight below it.' },
+  { id: 'outlet',  g: 'Walls, doors, stairs', name: 'Wall outlet, center (16 in)', inches: 16, tol: 3, kind: 'point', top: 'The middle of the outlet.', bot: 'The floor straight below it.' },
+  { id: 'rail',    g: 'Walls, doors, stairs', name: 'Stair handrail (36 in)', inches: 36, tol: 2, top: 'The top of the handrail.', bot: 'The step straight below it.' },
+  { id: 'steps',   g: 'Walls, doors, stairs', name: 'Stair steps (7.5 in each), count them', per: 7.5, tol: 0.25, unit: 'steps', top: 'The top edge of a higher step.', bot: 'The floor or step you count from, straight below.' },
+  { id: 'brick',   g: 'Walls, doors, stairs', name: 'Brick rows (3 rows = 8 in), count them', per: 8 / 3, tol: 0.06, unit: 'rows', top: 'The top of a brick row.', bot: 'The ground or the row you count from, straight below.' },
+  { id: 'block',   g: 'Walls, doors, stairs', name: 'Concrete block rows (8 in each), count them', per: 8, tol: 0.1, unit: 'rows', top: 'The top of a block row.', bot: 'The ground or the row you count from, straight below.' },
+  { id: 'ceil8',   g: 'Walls, doors, stairs', name: '8-ft ceiling (96 in), loose', inches: 96, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
+  { id: 'ceil9',   g: 'Walls, doors, stairs', name: '9-ft ceiling (108 in), loose', inches: 108, tol: 4, top: 'Where the back wall meets the ceiling.', bot: 'Where that wall meets the floor, straight below.' },
+  { id: 'counter', g: 'Kitchen', name: 'Kitchen counter (36 in)', inches: 36, tol: 1 },
+  { id: 'range',   g: 'Kitchen', name: 'Stove / range cooktop (36 in)', inches: 36, tol: 1, top: 'The cooktop surface (not the back panel).' },
+  { id: 'bar',     g: 'Kitchen', name: 'Bar counter (42 in)', inches: 42, tol: 1 },
+  { id: 'upperBot', g: 'Kitchen', name: 'Bottom of upper cabinets (54 in)', inches: 54, tol: 1.5, kind: 'point', top: 'The bottom edge of the upper cabinets.', bot: 'The floor straight below.' },
+  { id: 'fridge',  g: 'Kitchen', name: 'Refrigerator (70 in), loose', inches: 70, tol: 3, top: 'The top of the refrigerator.' },
+  { id: 'table',   g: 'Dining and living', name: 'Dining table (30 in)', inches: 30, tol: 1 },
+  { id: 'chair',   g: 'Dining and living', name: 'Dining chair seat (18 in)', inches: 18, tol: 1, top: 'The top of the seat.' },
+  { id: 'cstool',  g: 'Dining and living', name: 'Counter stool seat (24 in)', inches: 24, tol: 1, top: 'The top of the seat.' },
+  { id: 'bstool',  g: 'Dining and living', name: 'Bar stool seat (30 in)', inches: 30, tol: 1, top: 'The top of the seat.' },
+  { id: 'tv',      g: 'Dining and living', name: 'TV screen (enter its size)', tv: true, tol: 0.3, kind: 'any', unit: 'in TV', top: 'The top edge of the picture area (not the frame).', bot: 'The bottom edge of the picture area.' },
+  { id: 'vanity',  g: 'Bathroom', name: 'Bathroom vanity (34.5 in)', inches: 34.5, tol: 1.5 },
+  { id: 'toilet',  g: 'Bathroom', name: 'Toilet seat (17 in)', inches: 17, tol: 2, top: 'The top of the toilet seat.' },
+  { id: 'tub',     g: 'Bathroom', name: 'Bathtub rim (15 in), loose', inches: 15, tol: 1.5, top: 'The top of the tub rim.' },
+  { id: 'shower',  g: 'Bathroom', name: 'Shower head (80 in), loose', inches: 80, tol: 4, kind: 'point', top: 'Where the shower head comes out of the wall.', bot: 'The floor straight below.' },
+  { id: 'bed',     g: 'Bedroom', name: 'Bed, floor to top of mattress (25 in), loose', inches: 25, tol: 3, top: 'The top of the mattress.' },
+  { id: 'night',   g: 'Bedroom', name: 'Nightstand (25 in), loose', inches: 25, tol: 3 },
+  { id: 'pillowS', g: 'Bedroom', name: 'Standard pillow, long side (26 in)', inches: 26, tol: 1.5, kind: 'any', top: 'One end of the pillow.', bot: 'The other end of the long side.' },
+  { id: 'pillowQ', g: 'Bedroom', name: 'Queen pillow, long side (30 in)', inches: 30, tol: 1.5, kind: 'any', top: 'One end of the pillow.', bot: 'The other end of the long side.' },
+  { id: 'pillowK', g: 'Bedroom', name: 'King pillow, long side (36 in)', inches: 36, tol: 1.5, kind: 'any', top: 'One end of the pillow.', bot: 'The other end of the long side.' },
+  { id: 'mtwin',   g: 'Bedroom', name: 'Twin or full mattress length (75 in), lying mode', inches: 75, tol: 1, kind: 'len' },
+  { id: 'mqueen',  g: 'Bedroom', name: 'Queen or king mattress length (80 in), lying mode', inches: 80, tol: 1, kind: 'len' },
+  { id: 'mcal',    g: 'Bedroom', name: 'California king mattress length (84 in), lying mode', inches: 84, tol: 1, kind: 'len' },
+  { id: 'stop',    g: 'Outdoors and sports', name: 'Stop sign, top to bottom (30 in), loose', inches: 30, tol: 3, kind: 'any', top: 'The top edge of the sign.', bot: 'The bottom edge of the sign.' },
+  { id: 'hoop',    g: 'Outdoors and sports', name: 'Basketball rim (120 in)', inches: 120, tol: 0.5, top: 'The top of the rim.', bot: 'The ground straight below the rim.' },
+  { id: 'vbw',     g: 'Outdoors and sports', name: "Women's volleyball net (88.1 in)", inches: 88.125, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
+  { id: 'vbm',     g: 'Outdoors and sports', name: "Men's volleyball net (95.6 in)", inches: 95.625, tol: 0.75, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
+  { id: 'tennis',  g: 'Outdoors and sports', name: 'Tennis net, center (36 in)', inches: 36, tol: 0.5, top: 'The top of the net at its center.', bot: 'The ground straight below.' },
+  { id: 'iphonePM', g: 'Small things (close-ups)', name: 'iPhone 17 Pro Max, long side (6.43 in)', inches: 6.43, tol: 0.05, kind: 'any', top: 'One end of the phone.', bot: 'The other end of the long side.' },
+  { id: 'iphoneP', g: 'Small things (close-ups)', name: 'iPhone 17 Pro, long side (5.91 in)', inches: 5.91, tol: 0.05, kind: 'any', top: 'One end of the phone.', bot: 'The other end of the long side.' },
+  { id: 'wine',    g: 'Small things (close-ups)', name: 'Wine bottle, 750 ml (11.8 in)', inches: 11.8, tol: 0.5, kind: 'any', top: 'The top of the bottle.', bot: 'The bottom of the bottle.' },
+  { id: 'can',     g: 'Small things (close-ups)', name: 'Soda can, 12 oz (4.83 in)', inches: 4.83, tol: 0.05, kind: 'any', top: 'The top of the can.', bot: 'The bottom of the can.' },
+  { id: 'paper',   g: 'Small things (close-ups)', name: 'Letter paper, long side (11 in)', inches: 11, tol: 0.05, kind: 'any', top: 'One end of the sheet.', bot: 'The other end of the long side.' },
+  { id: 'bill',    g: 'Small things (close-ups)', name: 'Dollar bill, long side (6.14 in)', inches: 6.14, tol: 0.03, kind: 'any', top: 'One end of the bill.', bot: 'The other end of the long side.' },
+  { id: 'card',    g: 'Small things (close-ups)', name: 'Credit card or license, long side (3.37 in)', inches: 3.37, tol: 0.02, kind: 'any', top: 'One end of the card.', bot: 'The other end of the long side.' },
+  { id: 'woman',   g: 'People (loose)', name: 'Average US woman (63.5 in)', inches: 63.5, tol: 3, top: 'The top of her head.', bot: 'Her soles.' },
+  { id: 'man',     g: 'People (loose)', name: 'Average US man (68.9 in)', inches: 68.9, tol: 3, top: 'The top of his head.', bot: 'His soles.' },
+  { id: 'custom',  g: 'Custom', name: 'Custom size (enter inches)', custom: true, tol: 0, unit: 'in' }
 ];
 function refById(id) { for (var i = 0; i < REFS.length; i++) if (REFS[i].id === id) return REFS[i]; return REFS[0]; }
-// n = custom inches, or number of steps for stairs
+function refNeedsNumber(d) { return !!(d.custom || d.per || d.tv); }
+// n = custom inches, a count (steps, rows) or a TV size.
 function refInches(id, n) {
-  var d = refById(id);
-  if (d.custom) return n > 0 ? { inches: n, tol: 0 } : null;
-  if (d.count) return n >= 1 ? { inches: d.per * n, tol: d.tol * n } : null;
-  return { inches: d.inches, tol: d.tol };
+  var d = refById(id), out;
+  if (d.custom) out = n > 0 ? { inches: n, tol: 0 } : null;
+  else if (d.per) out = n >= 1 ? { inches: d.per * n, tol: d.tol * n } : null;
+  else if (d.tv) out = n > 0 ? { inches: n * TV_HEIGHT_PER_DIAG, tol: d.tol } : null;
+  else out = { inches: d.inches, tol: d.tol };
+  if (out) { out.kind = d.kind || 'floor'; out.id = d.id; }
+  return out;
 }
 
-// group: h core, w widths, bu front size points, x extras, s side core, ss side sizes, sf side foot,
-//        r ref 1, r2 ref 2, z eye-level click, ze eye-level edges. view: front | side | both
+// groups: h core, w widths, bu front size points, bd breast detail (front), x extras, lm arms and legs (front),
+// fh face and hands, an turn angle, s side core, ss side size depths, bds breast detail (side), lms limbs (side),
+// sf foot (side), r ref 1, r2 ref 2, z eye-level click, ze eye-level edges.
 var STEPS = [
-  { key: 'crown',  view: 'both',  group: 'h',  label: 'Crown', hint: 'Top of her skull. Not the top of the bun or the hair.' },
-  { key: 'chin',   view: 'both',  group: 'h',  label: 'Chin', hint: 'Bottom of the chin bone, not the soft fold under it.' },
-  { key: 'crotch', view: 'front', group: 'h',  label: 'Crotch', hint: 'Where the inner thighs meet.' },
-  { key: 'sole',   view: 'both',  group: 'h',  label: 'Soles', hint: 'The floor line under her heels.' },
-  { key: 'shL',    view: 'front', group: 'w',  label: 'Shoulder, left edge', short: 'Shoulder', hint: 'Outer edge of the shoulder at its widest.' },
-  { key: 'shR',    view: 'front', group: 'w',  label: 'Shoulder, right edge', short: 'Shoulder', hint: 'Outer edge of the other shoulder.' },
-  { key: 'waL',    view: 'front', group: 'w',  label: 'Waist, left edge', short: 'Waist', hint: 'Narrowest point between ribs and hips. No narrowing? Use navel level.' },
-  { key: 'waR',    view: 'front', group: 'w',  label: 'Waist, right edge', short: 'Waist', hint: 'Same level on the other side.' },
-  { key: 'hiL',    view: 'front', group: 'w',  label: 'Hip, left edge', short: 'Hip', hint: 'Widest point of the hips and butt from the front. Body outline, not hands.' },
-  { key: 'hiR',    view: 'front', group: 'w',  label: 'Hip, right edge', short: 'Hip', hint: 'Widest point on the other side.' },
-  { key: 'buL',    view: 'front', group: 'bu', label: 'Bust, left edge', short: 'Bust', hint: 'Outer edge of the body at the fullest part of the breasts.' },
-  { key: 'buR',    view: 'front', group: 'bu', label: 'Bust, right edge', short: 'Bust', hint: 'Same level on the other side.' },
-  { key: 'ubL',    view: 'front', group: 'bu', label: 'Underbust, left edge', short: 'Underbust', hint: 'Edge of the ribcage just under the breasts.' },
-  { key: 'ubR',    view: 'front', group: 'bu', label: 'Underbust, right edge', short: 'Underbust', hint: 'Same level on the other side.' },
-  { key: 'hair',   view: 'front', group: 'x',  label: 'Hairline', hint: 'Where the hair starts at the middle of the forehead.' },
-  { key: 'hdL',    view: 'front', group: 'x',  label: 'Head, left edge', short: 'Head', hint: 'Widest point of the skull above the ears. Ignore hair volume.' },
-  { key: 'hdR',    view: 'front', group: 'x',  label: 'Head, right edge', short: 'Head', hint: 'Same on the other side.' },
-  { key: 'nkL',    view: 'front', group: 'x',  label: 'Neck, left edge', short: 'Neck', hint: 'Narrowest point of the neck.' },
-  { key: 'nkR',    view: 'front', group: 'x',  label: 'Neck, right edge', short: 'Neck', hint: 'Same level on the other side.' },
-  { key: 'navel',  view: 'front', group: 'x',  label: 'Navel', hint: 'Middle of the belly button.' },
-  { key: 'wrist',  view: 'front', group: 'x',  label: 'Wrist', hint: 'The wrist crease of an arm hanging straight down.' },
-  { key: 'tip',    view: 'front', group: 'x',  label: 'Fingertip', hint: 'Tip of the middle finger on that same hand.' },
-  { key: 'knee',   view: 'front', group: 'x',  label: 'Knee', hint: 'Middle of the kneecap.' },
-  { key: 'brFront', view: 'side', group: 's',  label: 'Breasts, front', short: 'Breast front', hint: 'The point of the breasts that sticks out farthest.' },
-  { key: 'brLow',  view: 'side',  group: 's',  label: 'Breasts, lowest point', short: 'Breast low', hint: 'The lowest point of the breasts.' },
-  { key: 'beFront', view: 'side', group: 's',  label: 'Belly, front', short: 'Belly front', hint: 'The point of the belly that sticks out farthest.' },
-  { key: 'navelS', view: 'side',  group: 's',  label: 'Navel', hint: 'Where the belly button sits. Best guess if hidden.' },
-  { key: 'beLow',  view: 'side',  group: 's',  label: 'Belly, lowest point', short: 'Belly low', hint: 'The lowest point of the belly where it hangs.' },
-  { key: 'backUp', view: 'side',  group: 's',  label: 'Upper back', hint: 'The back at the shoulder blades, farthest back.' },
-  { key: 'buBack', view: 'side',  group: 's',  label: 'Butt, back', short: 'Butt back', hint: 'The point of the butt that sticks out farthest.' },
-  { key: 'bkBust', view: 'side',  group: 'ss', label: 'Back, at breast level', short: 'Back (bust)', hint: 'Her back, straight across from the front of the breasts.' },
-  { key: 'ubFront', view: 'side', group: 'ss', label: 'Underbust, front', short: 'Underbust', hint: 'The ribcage just under the breasts.' },
-  { key: 'ubBack', view: 'side',  group: 'ss', label: 'Back, at underbust level', short: 'Back (under)', hint: 'Her back, straight across from that point.' },
-  { key: 'bkWaist', view: 'side', group: 'ss', label: 'Back, at belly level', short: 'Back (belly)', hint: 'Her back, straight across from the front of the belly.' },
-  { key: 'hipFront', view: 'side', group: 'ss', label: 'Front, at butt level', short: 'Hip front', hint: 'The front of her body straight across from the back of the butt.' },
-  { key: 'heel',   view: 'side',  group: 'sf', label: 'Heel', hint: 'Back of the heel, foot flat on the floor.' },
-  { key: 'toe',    view: 'side',  group: 'sf', label: 'Longest toe', hint: 'Tip of the longest toe.' },
-  { key: 'r1Top',  view: 'both',  group: 'r',  label: 'Reference 1, top', short: 'Ref 1 top' },
-  { key: 'r1Bot',  view: 'both',  group: 'r',  label: 'Reference 1, bottom', short: 'Ref 1 bottom' },
-  { key: 'r2Top',  view: 'both',  group: 'r2', label: 'Reference 2, top', short: 'Ref 2 top' },
-  { key: 'r2Bot',  view: 'both',  group: 'r2', label: 'Reference 2, bottom', short: 'Ref 2 bottom' },
-  { key: 'hz',     view: 'both',  group: 'z',  label: 'Eye-level line', short: 'Eye level', hint: 'Click anywhere at the height of the camera. A dotted guide starts at the middle of the picture. On a beach, click where the water meets the sky.' },
-  { key: 'e1a',    view: 'both',  group: 'ze', label: 'Edge 1, near end', short: 'Edge 1', hint: 'A straight edge that runs away from the camera: a floor tile line, counter edge or ceiling edge. Click a point near you.' },
-  { key: 'e1b',    view: 'both',  group: 'ze', label: 'Edge 1, far end', short: 'Edge 1', hint: 'A point farther along that same edge.' },
-  { key: 'e2a',    view: 'both',  group: 'ze', label: 'Edge 2, near end', short: 'Edge 2', hint: 'A different edge running away from you, ideally on the other side or the ceiling.' },
-  { key: 'e2b',    view: 'both',  group: 'ze', label: 'Edge 2, far end', short: 'Edge 2', hint: 'A point farther along that edge.' }
+  { key: 'crown',  view: 'both',  g: ['h'],  label: 'Crown', hint: 'Top of her skull. Not the top of the bun or the hair.' },
+  { key: 'chin',   view: 'both',  g: ['h'],  label: 'Chin', hint: 'Bottom of the chin bone, not the soft fold under it.' },
+  { key: 'crotch', view: 'front', g: ['h'],  label: 'Crotch', hint: 'Where the inner thighs meet.' },
+  { key: 'sole',   view: 'both',  g: ['h'],  label: 'Soles', hint: 'The floor line under her heels.' },
+  { key: 'shL',    view: 'front', g: ['w'],  label: 'Shoulder, left edge', short: 'Shoulder', hint: 'Outer edge of the shoulder at its widest.' },
+  { key: 'shR',    view: 'front', g: ['w'],  label: 'Shoulder, right edge', short: 'Shoulder', hint: 'Outer edge of the other shoulder.' },
+  { key: 'waL',    view: 'front', g: ['w'],  label: 'Waist, left edge', short: 'Waist', hint: 'Narrowest point between ribs and hips. No narrowing? Use navel level.' },
+  { key: 'waR',    view: 'front', g: ['w'],  label: 'Waist, right edge', short: 'Waist', hint: 'Same level on the other side.' },
+  { key: 'hiL',    view: 'front', g: ['w'],  label: 'Hip, left edge', short: 'Hip', hint: 'Widest point of the hips and butt from the front. Body outline, not hands.' },
+  { key: 'hiR',    view: 'front', g: ['w'],  label: 'Hip, right edge', short: 'Hip', hint: 'Widest point on the other side.' },
+  { key: 'buL',    view: 'front', g: ['bu'], label: 'Bust, left edge', short: 'Bust', hint: 'Outer edge of her body at the fullest part of the breasts.' },
+  { key: 'buR',    view: 'front', g: ['bu'], label: 'Bust, right edge', short: 'Bust', hint: 'Same level on the other side.' },
+  { key: 'ubL',    view: 'front', g: ['bu'], label: 'Underbust, left side', short: 'Underbust', hint: 'Where a bra band wraps around her body, under the breasts. Click the left side of her body there.' },
+  { key: 'ubR',    view: 'front', g: ['bu'], label: 'Underbust, right side', short: 'Underbust', hint: 'Same spot on the right side of her body.' },
+  { key: 'sn',     view: 'front', g: ['bd'], label: 'Neck notch', hint: 'The dip at the base of the neck, between the collarbones.' },
+  { key: 'bLt',    view: 'front', g: ['bd'], label: 'Left breast, top', short: 'L top', hint: 'Where the left breast starts to rise from the chest.' },
+  { key: 'bLi',    view: 'front', g: ['bd'], label: 'Left breast, inner edge', short: 'L inner', hint: 'Inner edge of the left breast, toward the breastbone, at its fullest.' },
+  { key: 'bLo',    view: 'front', g: ['bd'], label: 'Left breast, outer edge', short: 'L outer', hint: 'Outer edge of the left breast, toward the arm, at the same level.' },
+  { key: 'bLn',    view: 'front', g: ['bd'], label: 'Left nipple', short: 'L nipple', hint: 'Center of the left nipple.' },
+  { key: 'bLb',    view: 'front', g: ['bd'], label: 'Left breast, lowest point', short: 'L low', hint: 'The lowest point of the left breast.' },
+  { key: 'bLf',    view: 'front', g: ['bd'], label: 'Left breast, fold', short: 'L fold', hint: 'Where the underside meets the body. Skip it if you cannot see it.' },
+  { key: 'bRt',    view: 'front', g: ['bd'], label: 'Right breast, top', short: 'R top', hint: 'Where the right breast starts to rise from the chest.' },
+  { key: 'bRi',    view: 'front', g: ['bd'], label: 'Right breast, inner edge', short: 'R inner', hint: 'Inner edge of the right breast, toward the breastbone, at its fullest.' },
+  { key: 'bRo',    view: 'front', g: ['bd'], label: 'Right breast, outer edge', short: 'R outer', hint: 'Outer edge of the right breast, toward the arm, at the same level.' },
+  { key: 'bRn',    view: 'front', g: ['bd'], label: 'Right nipple', short: 'R nipple', hint: 'Center of the right nipple.' },
+  { key: 'bRb',    view: 'front', g: ['bd'], label: 'Right breast, lowest point', short: 'R low', hint: 'The lowest point of the right breast.' },
+  { key: 'bRf',    view: 'front', g: ['bd'], label: 'Right breast, fold', short: 'R fold', hint: 'Where the underside meets the body. Skip it if you cannot see it.' },
+  { key: 'navel',  view: 'front', g: ['x', 'bd'], label: 'Navel', hint: 'Middle of the belly button.' },
+  { key: 'hair',   view: 'front', g: ['x'],  label: 'Hairline', hint: 'Where the hair starts at the middle of the forehead.' },
+  { key: 'hdL',    view: 'front', g: ['x'],  label: 'Head, left edge', short: 'Head', hint: 'Widest point of the skull above the ears. Ignore hair volume.' },
+  { key: 'hdR',    view: 'front', g: ['x'],  label: 'Head, right edge', short: 'Head', hint: 'Same on the other side.' },
+  { key: 'nkL',    view: 'front', g: ['x'],  label: 'Neck, left edge', short: 'Neck', hint: 'Narrowest point of the neck.' },
+  { key: 'nkR',    view: 'front', g: ['x'],  label: 'Neck, right edge', short: 'Neck', hint: 'Same level on the other side.' },
+  { key: 'armTop', view: 'front', g: ['lm'], label: 'Shoulder point (top of the arm)', short: 'Arm top', hint: 'The bony point on top of the shoulder, on the arm you will measure.' },
+  { key: 'elbow',  view: 'front', g: ['lm'], label: 'Elbow', hint: 'The point of the elbow on that arm.' },
+  { key: 'wrist',  view: 'front', g: ['x', 'lm', 'fh'], label: 'Wrist', hint: 'The wrist crease of an arm hanging straight down.' },
+  { key: 'tip',    view: 'front', g: ['x', 'fh'], label: 'Fingertip', hint: 'Tip of the middle finger on that same hand.' },
+  { key: 'uaL',    view: 'front', g: ['lm'], label: 'Upper arm, one edge', short: 'Upper arm', hint: 'Edge of the upper arm at its thickest.' },
+  { key: 'uaR',    view: 'front', g: ['lm'], label: 'Upper arm, other edge', short: 'Upper arm', hint: 'Opposite edge, same level.' },
+  { key: 'faL',    view: 'front', g: ['lm'], label: 'Forearm, one edge', short: 'Forearm', hint: 'Edge of the forearm at its thickest.' },
+  { key: 'faR',    view: 'front', g: ['lm'], label: 'Forearm, other edge', short: 'Forearm', hint: 'Opposite edge, same level.' },
+  { key: 'knee',   view: 'front', g: ['x', 'lm'], label: 'Knee', hint: 'Middle of the kneecap.' },
+  { key: 'ankle',  view: 'front', g: ['lm'], label: 'Ankle', hint: 'The ankle bone on that same leg.' },
+  { key: 'thL',    view: 'front', g: ['lm'], label: 'Thigh, outer edge', short: 'Thigh', hint: 'Outer edge of one thigh at its thickest.' },
+  { key: 'thR',    view: 'front', g: ['lm'], label: 'Thigh, inner edge', short: 'Thigh', hint: 'Inner edge of that same thigh, same level.' },
+  { key: 'caL',    view: 'front', g: ['lm'], label: 'Calf, outer edge', short: 'Calf', hint: 'Outer edge of that calf at its thickest.' },
+  { key: 'caR',    view: 'front', g: ['lm'], label: 'Calf, inner edge', short: 'Calf', hint: 'Inner edge of that calf, same level.' },
+  { key: 'fgB',    view: 'front', g: ['fh'], label: 'Middle finger, base', short: 'Finger base', hint: 'Where the middle finger meets the palm (the knuckle crease). Zoom in.' },
+  { key: 'nsL',    view: 'front', g: ['fh'], label: 'Nose, left edge', short: 'Nose', hint: 'Outer edge of the left nostril. Zoom in.' },
+  { key: 'nsR',    view: 'front', g: ['fh'], label: 'Nose, right edge', short: 'Nose', hint: 'Outer edge of the right nostril.' },
+  { key: 'eyL',    view: 'front', g: ['fh'], label: 'Left eye, inner corner', short: 'Eye', hint: 'Inner corner of the left eye.' },
+  { key: 'eyR',    view: 'front', g: ['fh'], label: 'Right eye, inner corner', short: 'Eye', hint: 'Inner corner of the right eye.' },
+  { key: 'chkL',   view: 'front', g: ['an'], label: 'Face, left edge', short: 'Face', hint: 'Left edge of the face at cheekbone level.' },
+  { key: 'chkR',   view: 'front', g: ['an'], label: 'Face, right edge', short: 'Face', hint: 'Right edge of the face at the same level.' },
+  { key: 'noseT',  view: 'front', g: ['an'], label: 'Nose tip', hint: 'The tip of the nose.' },
+  { key: 'brFront', view: 'side', g: ['s'],  label: 'Breasts, front', short: 'Breast front', hint: 'The point of the breasts that sticks out farthest.' },
+  { key: 'brLow',  view: 'side',  g: ['s'],  label: 'Breasts, lowest point', short: 'Breast low', hint: 'The lowest point of the breasts.' },
+  { key: 'beFront', view: 'side', g: ['s'],  label: 'Belly, front', short: 'Belly front', hint: 'The point of the belly that sticks out farthest.' },
+  { key: 'navelS', view: 'side',  g: ['s'],  label: 'Navel', hint: 'Where the belly button sits. Best guess if hidden.' },
+  { key: 'beLow',  view: 'side',  g: ['s'],  label: 'Belly, lowest point', short: 'Belly low', hint: 'The lowest point of the belly where it hangs.' },
+  { key: 'backUp', view: 'side',  g: ['s'],  label: 'Upper back', hint: 'The back at the shoulder blades, farthest back.' },
+  { key: 'buBack', view: 'side',  g: ['s'],  label: 'Butt, back', short: 'Butt back', hint: 'The point of the butt that sticks out farthest.' },
+  { key: 'brTop',  view: 'side',  g: ['bds'], label: 'Breast, top (side)', short: 'Breast top', hint: 'Where the breast starts to rise from the chest.' },
+  { key: 'brFold', view: 'side',  g: ['bds'], label: 'Breast, fold (side)', short: 'Breast fold', hint: 'Where the underside of the breast meets the body.' },
+  { key: 'bkBust', view: 'side',  g: ['ss'], label: 'Back, at breast level', short: 'Back (bust)', hint: 'Her back, straight across from the front of the breasts.' },
+  { key: 'ubFront', view: 'side', g: ['ss', 'bds'], label: 'Underbust, front', short: 'Underbust', hint: 'The ribcage just under the breasts.' },
+  { key: 'ubBack', view: 'side',  g: ['ss'], label: 'Back, at underbust level', short: 'Back (under)', hint: 'Her back, straight across from that point.' },
+  { key: 'bkWaist', view: 'side', g: ['ss'], label: 'Back, at belly level', short: 'Back (belly)', hint: 'Her back, straight across from the front of the belly.' },
+  { key: 'hipFront', view: 'side', g: ['ss'], label: 'Front, at butt level', short: 'Hip front', hint: 'The front of her body straight across from the back of the butt.' },
+  { key: 'tdF',    view: 'side',  g: ['lms'], label: 'Thigh, front (side)', short: 'Thigh front', hint: 'Front of the thigh at its thickest.' },
+  { key: 'tdB',    view: 'side',  g: ['lms'], label: 'Thigh, back (side)', short: 'Thigh back', hint: 'Back of the thigh straight across.' },
+  { key: 'cdF',    view: 'side',  g: ['lms'], label: 'Calf, front (side)', short: 'Calf front', hint: 'Front of the shin at the calf’s thickest level.' },
+  { key: 'cdB',    view: 'side',  g: ['lms'], label: 'Calf, back (side)', short: 'Calf back', hint: 'Back of the calf straight across.' },
+  { key: 'adF',    view: 'side',  g: ['lms'], label: 'Upper arm, front (side)', short: 'Arm front', hint: 'Front of the upper arm at its thickest.' },
+  { key: 'adB',    view: 'side',  g: ['lms'], label: 'Upper arm, back (side)', short: 'Arm back', hint: 'Back of the upper arm straight across.' },
+  { key: 'heel',   view: 'side',  g: ['sf'], label: 'Heel', hint: 'Back of the heel, foot flat on the floor.' },
+  { key: 'toe',    view: 'side',  g: ['sf'], label: 'Longest toe', hint: 'Tip of the longest toe.' },
+  { key: 'r1Top',  view: 'both',  g: ['r'],  label: 'Reference 1, top', short: 'Ref 1 top' },
+  { key: 'r1Bot',  view: 'both',  g: ['r'],  label: 'Reference 1, bottom', short: 'Ref 1 bottom' },
+  { key: 'r2Top',  view: 'both',  g: ['r2'], label: 'Reference 2, top', short: 'Ref 2 top' },
+  { key: 'r2Bot',  view: 'both',  g: ['r2'], label: 'Reference 2, bottom', short: 'Ref 2 bottom' },
+  { key: 'hz',     view: 'both',  g: ['z'],  label: 'Eye-level line', short: 'Eye level', hint: 'Click anywhere at the height of the camera. A dotted guide starts at the middle of the picture. On a beach, click where the water meets the sky.' },
+  { key: 'e1a',    view: 'both',  g: ['ze'], label: 'Edge 1, near end', short: 'Edge 1', hint: 'A straight edge that runs away from the camera: a floor tile line, counter edge or ceiling edge. Click a point near you.' },
+  { key: 'e1b',    view: 'both',  g: ['ze'], label: 'Edge 1, far end', short: 'Edge 1', hint: 'A point farther along that same edge.' },
+  { key: 'e2a',    view: 'both',  g: ['ze'], label: 'Edge 2, near end', short: 'Edge 2', hint: 'A different edge running away from you, ideally on the other side or the ceiling.' },
+  { key: 'e2b',    view: 'both',  g: ['ze'], label: 'Edge 2, far end', short: 'Edge 2', hint: 'A point farther along that edge.' }
 ];
+function stepByKey(k) { for (var i = 0; i < STEPS.length; i++) if (STEPS[i].key === k) return STEPS[i]; return null; }
 
-// Target bands for Keisha mode.
+var CURVES = [
+  { id: 'brF', view: 'front', loop: true,  pair: 'br', label: 'Breast outline (one breast)', hint: 'Tap around the edge of one breast, starting at the top. Stop just before the start; the loop closes itself.' },
+  { id: 'beF', view: 'front', loop: true,  pair: 'be', label: 'Belly outline', hint: 'Tap down one side of the belly, across the bottom, and back up the other side.' },
+  { id: 'buF', view: 'front', loop: true,  pair: 'bu', label: 'Hips and butt outline', hint: 'Tap down the outer edge of one hip, across, and back up the other hip.' },
+  { id: 'thF', view: 'front', loop: true,  pair: 'th', label: 'Thigh outline (one thigh)', hint: 'Tap around one thigh, from the top down one edge and back up the other.' },
+  { id: 'brS', view: 'side',  loop: false, pair: 'br', label: 'Breast side profile', hint: 'From where the breast starts on the chest, over the front, down to the fold.' },
+  { id: 'beS', view: 'side',  loop: false, pair: 'be', label: 'Belly side profile', hint: 'From under the breasts, over the belly, down to the pubic area.' },
+  { id: 'buS', view: 'side',  loop: false, pair: 'bu', label: 'Butt side profile', hint: 'From the small of the back, over the butt, to the crease under it.' },
+  { id: 'thS', view: 'side',  loop: true,  pair: 'th', label: 'Thigh outline (side)', hint: 'Tap around the thigh from the side: down the front edge and back up the back edge.' }
+];
+var PAIR_NAMES = { br: 'One breast', be: 'Belly', bu: 'Butt', th: 'One thigh' };
+
+// Keisha mode grading bands.
 var BANDS = {
   heads:  { green: [8.0, 8.5],  yellow: [7.75, 8.75] },
   crotch: { green: [0.45, 0.49], yellow: [0.43, 0.51] },
@@ -309,6 +419,32 @@ var BANDS = {
   footHeads:    { green: [1.1, 1.35],  yellow: [1.0, 1.5] }
 };
 
+// Store charts (body measurements, inches). Regular: Nike women's numeric. Plus: Kohl's plus.
+var MISSES = [
+  ['00', 'XXS', 28.5, 23, 31.5], ['0', 'XXS', 29.5, 23, 32.5], ['2', 'XS', 31, 24.5, 34], ['4', 'S', 32.5, 26, 35.5], ['6', 'S', 34, 27.5, 37],
+  ['8', 'M', 35.5, 29, 38.5], ['10', 'M', 37, 30.5, 40], ['12', 'L', 38.5, 32, 41.5], ['14', 'L', 41, 34, 43.5], ['16', 'XL', 43.5, 36, 45.5],
+  ['18', 'XL', 46, 38, 47.5], ['20', 'XXL', 48.5, 40, 49.5], ['22', 'XXL', 51, 42, 51.5]
+];
+var PLUS = [  // [letter, numeric, bust max, waist max, hip max]
+  ['0X', '14W', 43.5, 37.5, 47], ['1X', '16W–18W', 47.5, 41.5, 51], ['2X', '20W–22W', 51.5, 45.5, 55],
+  ['3X', '24W–26W', 55.5, 49.5, 59], ['4X', '28W–30W', 59.5, 53.5, 63], ['5X', '32W–34W', 63.5, 57.5, 67]
+];
+function chartSize(chart, cols, vals) {
+  var best = -1;
+  for (var m = 0; m < 3; m++) {
+    var v = vals[m]; if (!(v > 0)) continue;
+    var idx = -2;
+    for (var i = 0; i < chart.length; i++) if (v <= chart[i][cols[m]] + 0.01) { idx = i; break; }
+    if (idx === -2) return { beyond: true };
+    if (idx > best) best = idx;
+  }
+  return best < 0 ? null : { row: chart[best] };
+}
+function clothing(bust, waist, hips) {
+  return { misses: chartSize(MISSES, [2, 3, 4], [bust, waist, hips]), plus: chartSize(PLUS, [2, 3, 4], [bust, waist, hips]) };
+}
+
+/* ================= Helpers ================= */
 function grade(v, band) {
   if (v >= band.green[0] && v <= band.green[1]) return 'green';
   if (v >= band.yellow[0] && v <= band.yellow[1]) return 'yellow';
@@ -320,21 +456,20 @@ function fmtFtIn(inches) {
   return ft + '′' + i + '″';
 }
 function pushOnce(arr, s) { if (arr.indexOf(s) < 0) arr.push(s); }
-// Ramanujan's ellipse perimeter from full width and full depth.
-function ellipseC(w, d) {
+function ellipseC(w, d) {           // Ramanujan's ellipse perimeter from full width and full depth
   var a = w / 2, b = d / 2;
   return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
 }
-var CUPS = ['AA', 'A', 'B', 'C', 'D', 'DD', 'DDD/F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O'];
-function cupFor(diff) {
-  if (diff < 1) return 'AA';
-  var i = Math.round(diff);
-  return i < CUPS.length ? CUPS[i] : 'O+';
+var CUPS_US = ['A', 'B', 'C', 'D', 'DD', 'DDD', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N+'];
+function cupFor(index) {             // index = inches of bust minus underbust (1 = A)
+  var i = Math.round(index);
+  if (i < 1) i = 1;
+  return i > CUPS_US.length ? 'N+' : CUPS_US[i - 1];
 }
 function bandFor(under) { var b = Math.round(under); return b % 2 ? b + 1 : b; }
 function shoeFor(footIn) { return Math.round((3 * footIn - 21) * 2) / 2; }   // US women's
+function short(t) { return String(t).split(' — ')[0]; }
 
-// Body axis: straight down for standing; crown-to-soles for lying.
 function axisOf(p, lying) {
   if (lying && p.crown && p.sole) {
     var dx = p.sole.x - p.crown.x, dy = p.sole.y - p.crown.y, L = Math.hypot(dx, dy);
@@ -344,6 +479,7 @@ function axisOf(p, lying) {
 }
 function along(ax, pt) { return pt.x * ax.ux + pt.y * ax.uy; }
 function across(ax, pt) { return -pt.x * ax.uy + pt.y * ax.ux; }
+function dist(a, b) { return Math.hypot(b.x - a.x, b.y - a.y); }
 function lineCross(a, b, c, d) {
   var den = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
   if (Math.abs(den) < 1e-9) return null;
@@ -355,39 +491,112 @@ function angleBetween(a, b, c, d) {
   return Math.min(x, Math.PI - x) * 180 / Math.PI;
 }
 
+/* ================= Curves ================= */
+// Smooth path through tapped points (Catmull-Rom), returned as a dense polyline.
+function smoothPath(pts, loop) {
+  var n = pts.length; if (n < 2) return pts.slice();
+  var out = [], segs = loop ? n : n - 1;
+  function P(i) { if (loop) return pts[(i + n) % n]; return pts[Math.max(0, Math.min(n - 1, i))]; }
+  for (var i = 0; i < segs; i++) {
+    var p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    for (var k = 0; k < 10; k++) {
+      var t = k / 10, t2 = t * t, t3 = t2 * t;
+      out.push({
+        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+      });
+    }
+  }
+  out.push(loop ? out[0] : pts[n - 1]);
+  return out;
+}
+function pathLength(path) { var L = 0; for (var i = 1; i < path.length; i++) L += dist(path[i - 1], path[i]); return L; }
+// x positions where a polyline crosses the horizontal line at y
+function crossingsAt(path, y) {
+  var xs = [];
+  for (var i = 1; i < path.length; i++) {
+    var a = path[i - 1], b = path[i];
+    if ((a.y - y) * (b.y - y) <= 0 && a.y !== b.y) xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y));
+  }
+  return xs;
+}
+function yRange(path) {
+  var lo = Infinity, hi = -Infinity;
+  path.forEach(function (p) { if (p.y < lo) lo = p.y; if (p.y > hi) hi = p.y; });
+  return [lo, hi];
+}
+// Width (loop) or depth from the chord between the ends (open profile) at relative height t (0 top, 1 bottom).
+function sliceSize(path, loop, t) {
+  var r = yRange(path), y = r[0] + t * (r[1] - r[0]), xs = crossingsAt(path, y);
+  if (!xs.length) return 0;
+  if (loop) return Math.max.apply(null, xs) - Math.min.apply(null, xs);
+  var a = path[0], b = path[path.length - 1], cx;
+  if (Math.abs(b.y - a.y) < 1e-6) cx = (a.x + b.x) / 2; else cx = a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y);
+  var best = 0;
+  xs.forEach(function (x) { if (Math.abs(x - cx) > best) best = Math.abs(x - cx); });
+  return best;
+}
+// Slice volume: each horizontal slice is an ellipse (or half-ellipse on the body) with area pi/4 * width * depth.
+function sliceVolume(frontPts, frontLoop, sidePts, sideLoop, fi, si) {
+  if (!(frontPts && sidePts && frontPts.length >= 3 && sidePts.length >= 3 && fi && si)) return null;
+  var fp = smoothPath(frontPts, frontLoop), sp = smoothPath(sidePts, sideLoop);
+  var fr = yRange(fp), sr = yRange(sp);
+  var hF = (fr[1] - fr[0]) * fi, hS = (sr[1] - sr[0]) * si, h = (hF + hS) / 2, N = 48, vol = 0, maxC = 0;
+  if (!(h > 0)) return null;
+  for (var k = 0; k < N; k++) {
+    var t = (k + 0.5) / N, w = sliceSize(fp, frontLoop, t) * fi, d = sliceSize(sp, sideLoop, t) * si;
+    vol += Math.PI / 4 * w * d * (h / N);
+    if (sideLoop) maxC = Math.max(maxC, ellipseC(w, d));
+  }
+  return { in3: vol, cc: vol * 16.387, height: h, hF: hF, hS: hS, maxCirc: sideLoop ? maxC : null, profile: sideLoop ? null : pathLength(sp) * si };
+}
+
+/* ================= Main measurement ================= */
 /* compute(points, opt)
-   opt: { view: 'front'|'side', lying, heightOn, refs: [{inches,tol}|null, {inches,tol}|null],
-          method: 'same'|'floor', finder, shoes (in), headGuess, imgH } */
+   opt: { view, lying, heightOn, refs: [ref|null, ref|null], method, finder, shoes, keisha, turnFix, imgH } */
 function compute(p, o) {
   o = o || {};
-  var r = { warnings: [], notes: [] };
+  var r = { warnings: [], notes: [], why: [] };
   var ax = axisOf(p, o.lying); r.ax = ax;
   function a(k) { return along(ax, p[k]); }
   function wid(k1, k2) { if (!p[k1] || !p[k2]) return null; var d = Math.abs(across(ax, p[k2]) - across(ax, p[k1])); return d > 0 ? d : null; }
 
   if (p.crown && p.chin) {
     r.head = a('chin') - a('crown');
-    if (r.head <= 0) { r.warnings.push('The chin is above the crown. Undo and click the crown first, then the chin.'); r.head = null; }
+    if (r.head <= 0) { r.warnings.push('The chin is above the crown. Tap Crown or Chin in the list to redo it.'); r.head = null; }
   }
   if (p.crown && p.sole) {
     r.total = a('sole') - a('crown');
-    if (r.total <= 0) { r.warnings.push('The soles are above the crown. Check the order of your points.'); r.total = null; }
+    if (r.total <= 0) { r.warnings.push('The soles are above the crown. Check those two points.'); r.total = null; }
   }
   if (r.head && r.total) {
-    if (r.head > r.total) r.warnings.push('The chin is below the soles. Check the order of your points.');
+    if (r.head > r.total) r.warnings.push('The chin is below the soles. Check those points.');
     else r.heads = r.total / r.head;
   }
   if (o.view !== 'side' && p.crotch && r.total) {
-    if (a('crotch') <= a('crown') || a('crotch') >= a('sole')) {
-      r.warnings.push('The crotch point should sit between the crown and the soles.');
-    } else {
-      r.crotch = (a('sole') - a('crotch')) / r.total;
-      if (r.head) r.crotchHeadsDown = (a('crotch') - a('crown')) / r.head;
-    }
+    if (a('crotch') <= a('crown') || a('crotch') >= a('sole')) r.warnings.push('The crotch point should sit between the crown and the soles.');
+    else { r.crotch = (a('sole') - a('crotch')) / r.total; if (r.head) r.crotchHeadsDown = (a('crotch') - a('crown')) / r.head; }
   }
+
   if (o.view !== 'side') {
-    r.sh = wid('shL', 'shR'); r.wa = wid('waL', 'waR'); r.hi = wid('hiL', 'hiR');
-    r.bu = wid('buL', 'buR'); r.ub = wid('ubL', 'ubR'); r.hd = wid('hdL', 'hdR'); r.nk = wid('nkL', 'nkR');
+    // Turn angle from the face: how far the nose tip sits off the middle of the face.
+    if (p.chkL && p.chkR && p.noseT) {
+      var half = Math.abs(across(ax, p.chkR) - across(ax, p.chkL)) / 2;
+      if (half > 0) {
+        var mid = (across(ax, p.chkR) + across(ax, p.chkL)) / 2, off = Math.abs(across(ax, p.noseT) - mid);
+        r.turnDeg = Math.atan(off / half / 1.5) * 180 / Math.PI;
+      }
+    }
+    var turn = o.turnFix && r.turnDeg > 3 ? r.turnDeg * Math.PI / 180 : 0;
+    // Undo the turn: what you see = sqrt(W^2 cos^2 + D^2 sin^2); D/W is a typical depth ratio for each level.
+    function fix(w, ratio) { if (!w || !turn) return w; return w / Math.sqrt(Math.pow(Math.cos(turn), 2) + Math.pow(ratio * Math.sin(turn), 2)); }
+    if (turn) r.turnFixed = r.turnDeg;
+    if (r.turnDeg > 45) r.notes.push('She’s turned more than about 45°. Widths and sizes can’t be trusted at that angle.');
+    r.sh = fix(wid('shL', 'shR'), 0.45); r.wa = fix(wid('waL', 'waR'), 0.8); r.hi = fix(wid('hiL', 'hiR'), 0.75);
+    r.bu = fix(wid('buL', 'buR'), 0.75); r.ub = fix(wid('ubL', 'ubR'), 0.7); r.hd = fix(wid('hdL', 'hdR'), 1.2); r.nk = fix(wid('nkL', 'nkR'), 1.0);
+    r.ua = fix(wid('uaL', 'uaR'), 1.0); r.fa = fix(wid('faL', 'faR'), 0.9); r.th = fix(wid('thL', 'thR'), 1.0); r.ca = fix(wid('caL', 'caR'), 1.0);
+    if (r.ub && r.wa && r.ub < 0.6 * r.wa) r.warnings.push('Underbust reads much narrower than her waist. That’s a mis-click: tap Underbust in the list and click the two sides of her body where a bra band would go.');
+    if (r.bu && r.ub && r.ub > r.bu * 1.02) r.warnings.push('Underbust reads wider than her bust. Check both pairs of points.');
     if (r.sh && r.hi) r.hipSh = r.hi / r.sh;
     if (r.wa && r.hi) r.waHi = r.wa / r.hi;
     if (r.nk && r.hd) r.neckHead = r.nk / r.hd;
@@ -397,15 +606,51 @@ function compute(p, o) {
       if (p.knee && p.sole) r.kneeUp = (a('sole') - a('knee')) / r.head;
       if (p.wrist && p.crotch) r.wristVsCrotch = (a('wrist') - a('crotch')) / r.head;
     }
-    if (p.wrist && p.tip && p.hair && p.chin) {
-      var face = a('chin') - a('hair'), hand = Math.hypot(p.tip.x - p.wrist.x, p.tip.y - p.wrist.y);
-      if (face > 0) r.handFace = hand / face;
+    if (p.wrist && p.tip && p.hair && p.chin) { var face = a('chin') - a('hair'); if (face > 0) r.handFace = dist(p.wrist, p.tip) / face; }
+    if (p.fgB && p.tip && p.wrist) { var hand = dist(p.wrist, p.tip); if (hand > 0) r.fingerHand = dist(p.fgB, p.tip) / hand; }
+    if (p.nsL && p.nsR && p.eyL && p.eyR) { var eg = Math.abs(across(ax, p.eyR) - across(ax, p.eyL)); if (eg > 0) r.noseEye = Math.abs(across(ax, p.nsR) - across(ax, p.nsL)) / eg; }
+    // Arm and leg lengths
+    if (p.armTop && p.elbow) r.upperArm = dist(p.armTop, p.elbow);
+    if (p.elbow && p.wrist) r.forearm = dist(p.elbow, p.wrist);
+    if (p.wrist && p.tip) r.hand = dist(p.wrist, p.tip);
+    if (p.crotch && p.knee) r.thighLen = a('knee') - a('crotch');
+    if (p.knee && p.ankle) r.calfLen = a('ankle') - a('knee');
+    if (r.upperArm && r.forearm) r.armLen = r.upperArm + r.forearm;
+    // Breast detail
+    var B = {};
+    ['L', 'R'].forEach(function (s) {
+      var t = p['b' + s + 't'], i = p['b' + s + 'i'], ou = p['b' + s + 'o'], n = p['b' + s + 'n'], lo = p['b' + s + 'b'], f = p['b' + s + 'f'];
+      var o2 = {};
+      if (i && ou) o2.base = Math.abs(across(ax, ou) - across(ax, i));
+      if (t && lo) o2.len = along(ax, lo) - along(ax, t);
+      if (n && i) o2.mr = Math.abs(across(ax, n) - across(ax, i));
+      if (n && ou) o2.lr = Math.abs(across(ax, ou) - across(ax, n));
+      if (n && (f || lo)) o2.ir = Math.abs(along(ax, f || lo) - along(ax, n));
+      if (n && f) o2.nipVsFold = along(ax, n) - along(ax, f);
+      if (n) o2.nip = n;
+      B[s] = o2;
+    });
+    r.breast = B;
+    function avg2(k) { var v = [B.L[k], B.R[k]].filter(function (x) { return x > 0 || x < 0; }); return v.length ? v.reduce(function (s, x) { return s + x; }, 0) / v.length : null; }
+    r.brBase = avg2('base'); r.brLen = avg2('len');
+    if (p.bLi && p.bRi) {
+      r.brGap = Math.abs(across(ax, p.bRi) - across(ax, p.bLi));
+      if ((across(ax, p.bRi) - across(ax, p.bLi)) * (across(ax, p.bRo || p.bRi) - across(ax, p.bLo || p.bLi)) < 0) r.brGap = 0;
     }
+    if (B.L.nip && B.R.nip && r.head) r.nipUneven = Math.abs(along(ax, B.L.nip) - along(ax, B.R.nip)) / r.head;
+    if (p.sn && p.navel && (B.L.nip || B.R.nip)) {
+      var su = a('navel') - a('sn'), ny = avg2Along([B.L.nip, B.R.nip]);
+      if (su > 0) r.nipPos = (ny - a('sn')) / su;
+    }
+    var nf = avg2('nipVsFold'); if (nf != null && r.head) r.nipFold = nf / r.head;
+    function avg2Along(list) { var v = list.filter(Boolean).map(function (q) { return along(ax, q); }); return v.reduce(function (s, x) { return s + x; }, 0) / v.length; }
   } else {
     var dir = 0;
     if (p.brFront && p.backUp) dir = Math.sign(across(ax, p.brFront) - across(ax, p.backUp)) || 1;
     else if (p.beFront && p.buBack) dir = Math.sign(across(ax, p.beFront) - across(ax, p.buBack)) || 1;
+    else if (p.toe && p.heel) dir = Math.sign(across(ax, p.toe) - across(ax, p.heel)) || 1;
     var fwd = function (k) { return across(ax, p[k]) * dir; };
+    r.dir = dir;
     if (r.head && dir) {
       if (p.brFront && p.beFront) r.brPastBe = (fwd('brFront') - fwd('beFront')) / r.head;
       if (p.buBack && p.backUp) r.buPast = (fwd('backUp') - fwd('buBack')) / r.head;
@@ -414,19 +659,31 @@ function compute(p, o) {
       if (p.beLow) r.bellyHang = (a('beLow') - a('navelS')) / r.head;
       if (p.brLow) r.brLowVsNavel = (a('brLow') - a('navelS')) / r.head;
     }
+    if (p.buBack && r.total) r.buHeight = (a('sole') - a('buBack')) / r.total;   // share of height from the floor
     var dep = function (k1, k2) { if (!p[k1] || !p[k2]) return null; var d = Math.abs(across(ax, p[k1]) - across(ax, p[k2])); return d > 0 ? d : null; };
     r.dBust = dep('brFront', 'bkBust'); r.dUnder = dep('ubFront', 'ubBack');
     r.dWaist = dep('beFront', 'bkWaist'); r.dHip = dep('hipFront', 'buBack');
-    if (p.heel && p.toe) r.foot = Math.hypot(p.toe.x - p.heel.x, p.toe.y - p.heel.y) || null;
+    r.dThigh = dep('tdF', 'tdB'); r.dCalf = dep('cdF', 'cdB'); r.dArm = dep('adF', 'adB');
+    if (p.heel && p.toe) r.foot = dist(p.heel, p.toe) || null;
     if (r.foot && r.head) r.footHeads = r.foot / r.head;
+    // Breast projection: front of the breast past the ribcage under it (or past the line from its top to its fold).
+    if (p.brFront && dir) {
+      if (p.ubFront) r.brProj = fwd('brFront') - fwd('ubFront');
+      else if (p.brTop && p.brFold) {
+        var A2 = p.brTop, B2 = p.brFold, F = p.brFront;
+        r.brProj = Math.abs((B2.x - A2.x) * (A2.y - F.y) - (A2.x - F.x) * (B2.y - A2.y)) / (dist(A2, B2) || 1);
+      }
+      if (r.brProj != null && r.brProj < 0) r.brProj = 0;
+    }
+    if (p.brTop && p.brFold) r.brSideLen = a('brFold') - a('brTop');
   }
-  if (o.heightOn) scaleAndHeight(p, o, r);
+  if (o.heightOn !== false) scaleAndHeight(p, o, r);
   return r;
 }
 
 function eyeLevelY(p, o, r) {
   if (o.finder) {
-    if (!(p.e1a && p.e1b && p.e2a && p.e2b)) return null;
+    if (!(p.e1a && p.e1b && p.e2a && p.e2b)) { r.why.push('Eye level: click the two edge lines.'); return null; }
     var X = lineCross(p.e1a, p.e1b, p.e2a, p.e2b);
     if (!X || angleBetween(p.e1a, p.e1b, p.e2a, p.e2b) < 3) {
       r.warnings.push('Those two edges are almost parallel, so they never meet in a useful spot. Pick edges that slant toward each other more, or turn off "Find eye level for me" and click it yourself.');
@@ -436,56 +693,62 @@ function eyeLevelY(p, o, r) {
     if (o.imgH && (X.y < -o.imgH || X.y > 2 * o.imgH)) r.notes.push('The edges meet far outside the picture, which usually means the camera is tilted. Treat the height as rough.');
     return X.y;
   }
+  if (!p.hz) r.why.push('Eye level isn’t set yet.');
   return p.hz ? p.hz.y : null;
 }
 
 function scaleAndHeight(p, o, r) {
-  var lying = !!o.lying, method = lying ? 'same' : (o.method || 'same');
-  var hy = method === 'floor' ? eyeLevelY(p, o, r) : null;
+  var lying = !!o.lying, anyFloorRef = false;
+  (o.refs || []).forEach(function (ref) { if (ref && ref.kind !== 'any' && ref.kind !== 'len') anyFloorRef = true; });
+  var method = lying ? 'same' : (o.method || 'same');
+  var hy = method === 'floor' && anyFloorRef ? eyeLevelY(p, o, r) : null;
   if (hy != null) r.hzY = hy;
-  var ipps = [], tols = [], pxs = [], hzRel = 0;
+  var ipps = [], tols = [], pxs = [], hzRel = 0, kinds = [];
   [['r1Top', 'r1Bot'], ['r2Top', 'r2Bot']].forEach(function (k, i) {
-    var ref = o.refs && o.refs[i];
-    if (!ref || !(ref.inches > 0) || !p[k[0]] || !p[k[1]]) return;
-    var px = lying ? Math.hypot(p[k[1]].x - p[k[0]].x, p[k[1]].y - p[k[0]].y) : p[k[1]].y - p[k[0]].y;
-    if (px <= 0) { r.warnings.push('Reference ' + (i + 1) + ': the bottom is above the top. Undo and click the top first, then the bottom.'); return; }
+    var ref = o.refs && o.refs[i], n = i + 1;
+    if (!ref) { if (o.refs && o.refs[i] === null && o.refNames && o.refNames[i]) r.why.push('Reference ' + n + ': enter its number.'); return; }
+    if (!p[k[0]] || !p[k[1]]) { r.why.push('Reference ' + n + ': ' + (!p[k[0]] ? 'its top' : 'its bottom') + ' isn’t clicked (or was skipped).'); return; }
+    var free = lying || ref.kind === 'any' || ref.kind === 'len';
+    var px = free ? dist(p[k[0]], p[k[1]]) : p[k[1]].y - p[k[0]].y;
+    if (px <= 0) { r.warnings.push('Reference ' + n + ': the bottom is above the top. Tap it in the list and redo it.'); return; }
     var ipp;
-    if (method === 'floor') {
+    if (method === 'floor' && !free) {
       if (hy == null) return;
-      if (!p.sole) { pushOnce(r.notes, 'The eye-level method needs her soles. If her feet are hidden, use a reference right beside her instead.'); return; }
+      if (!p.sole) { r.why.push('Reference ' + n + ': "Closer or farther" needs her soles, and they were skipped. Use a reference right beside her instead.'); return; }
       var dP = p.sole.y - hy, dR = p[k[1]].y - hy;
       if (dP <= 0 || dR <= 0) { pushOnce(r.warnings, 'The eye-level line has to sit above both her feet and the bottom of each reference.'); return; }
       ipp = ref.inches * dR / (px * dP);
-      if (i === 0) {
-        var f = function (h) { return (p[k[1]].y - h) / (p.sole.y - h); };
-        hzRel = Math.abs(f(hy + 3) - f(hy - 3)) / (2 * f(hy));
-      }
+      if (!ipps.length) { var f = function (h) { return (p[k[1]].y - h) / (p.sole.y - h); }; hzRel = Math.abs(f(hy + 3) - f(hy - 3)) / (2 * f(hy)); }
       if (o.imgH && (dP < 0.06 * o.imgH || dR < 0.06 * o.imgH)) pushOnce(r.notes, 'The eye-level line is very close to the feet, so small click errors change the result a lot.');
     } else {
       ipp = ref.inches / px;
-      if (!lying && p.sole && o.imgH && Math.abs(p[k[1]].y - p.sole.y) > 0.03 * o.imgH) {
-        pushOnce(r.notes, 'A reference sits higher or lower on the floor than her feet, so it may be closer or farther than her. If so, choose "Closer or farther than her".');
-      }
+      if (!free && p.sole && o.imgH && Math.abs(p[k[1]].y - p.sole.y) > 0.03 * o.imgH) pushOnce(r.notes, 'A reference sits higher or lower on the floor than her feet, so it may be closer or farther than her. If so, choose "Closer or farther than her".');
     }
-    ipps.push(ipp); tols.push(ref.tol / ref.inches); pxs.push(px);
+    ipps.push(ipp); tols.push(ref.tol / ref.inches); pxs.push(px); kinds.push(free ? 'any' : 'floor');
   });
 
   var extra = 0;
   if (ipps.length) {
     r.ipp = ipps.reduce(function (s, v) { return s + v; }, 0) / ipps.length;
-    r.scaleFrom = 'ref'; r.refCount = ipps.length; r.method = lying ? 'lying' : method;
+    r.scaleFrom = 'ref'; r.refCount = ipps.length; r.method = lying ? 'lying' : (method === 'floor' && kinds.indexOf('floor') >= 0 ? 'floor' : 'same');
     if (ipps.length === 2) {
       r.ippEach = ipps;
       var diff = Math.abs(ipps[0] - ipps[1]) / r.ipp;
       if (diff > Math.max(0.04, 1.5 * Math.hypot(tols[0], tols[1]))) r.refsDisagree = diff;
     }
-    var tolRel = ipps.length === 2 ? Math.hypot(tols[0], tols[1]) / 2 : tols[0];
-    var clickRel = 0;
+    var tolRel = ipps.length === 2 ? Math.hypot(tols[0], tols[1]) / 2 : tols[0], clickRel = 0;
     pxs.forEach(function (px) { clickRel += Math.pow(2.8 / px, 2) / (pxs.length * pxs.length); });
     r.scaleRel = Math.sqrt(tolRel * tolRel + clickRel + hzRel * hzRel);
-    if (r.total && pxs[0] < 0.15 * r.total) pushOnce(r.notes, 'A reference looks small next to her, so the height is less precise. Zoom in for those clicks.');
-  } else if (o.headGuess && r.head) {
-    r.ipp = HEAD_AVG_IN / r.head; r.scaleFrom = 'head'; r.scaleRel = 0.07;
+    if (r.total && Math.max.apply(null, pxs) < 0.15 * r.total) pushOnce(r.notes, 'The reference is small next to her, so the height is less precise. Zoom in for those clicks.');
+  } else if (r.head) {
+    if (o.keisha) { r.ipp = KEISHA_HEAD_IN / r.head; r.scaleFrom = 'keisha'; r.scaleRel = 0.06; }
+    else if (r.heads) {
+      // Real people: head size grows slowly with height, so more head-lengths means a taller person.
+      var est = AVG_WOMAN_IN * Math.pow(r.heads / (AVG_WOMAN_IN / HEAD_AVG_IN), 1 / 0.7);
+      r.ipp = est / r.total; r.scaleFrom = 'adjusted'; r.scaleRel = 0.08;
+    } else { r.ipp = HEAD_AVG_IN / r.head; r.scaleFrom = 'avghead'; r.scaleRel = 0.08; }
+  } else if (o.keisha && o.view !== 'side' && p.crotch && p.sole) {
+    r.ipp = 0.47 * KEISHA_IN / (along(r.ax, p.sole) - along(r.ax, p.crotch)); r.scaleFrom = 'keishaLegs'; r.scaleRel = 0.06;
   }
   if (!r.ipp) return;
 
@@ -500,248 +763,405 @@ function scaleAndHeight(p, o, r) {
     var bodyRel = r.total ? Math.pow(2.8 / r.total, 2) : 0;
     r.heightIn = hIn;
     r.heightErr = hIn * Math.sqrt(r.scaleRel * r.scaleRel + bodyRel + extra * extra);
+    r.quality = r.scaleFrom === 'ref' ? (r.heightHow === 'full' ? 'Measured' : 'Estimate') : 'Guess';
     if (r.ippEach && r.total) r.heightEach = r.ippEach.map(function (v) { return r.total * v - shoes; });
   }
 }
 
-// Scale for each picture. A reference in either picture carries over to the other through her head length.
+/* ================= Combining the front and side pictures ================= */
 function bridge(fr, sr) {
-  function own(x, kind) { return x && x.ipp && x.scaleFrom === kind ? x.ipp : null; }
-  function fill(fi, si) {
-    if (!fi && si && fr && sr && fr.head && sr.head) fi = si * sr.head / fr.head;
-    if (!si && fi && fr && sr && fr.head && sr.head) si = fi * fr.head / sr.head;
-    return [fi, si];
-  }
-  var x = fill(own(fr, 'ref'), own(sr, 'ref'));
-  if (x[0] || x[1]) return { fi: x[0], si: x[1], from: 'ref' };
-  x = fill(own(fr, 'head'), own(sr, 'head'));
-  if (x[0] || x[1]) return { fi: x[0], si: x[1], from: 'head' };
-  return { fi: null, si: null, from: null };
+  var rank = { ref: 3, keisha: 2, keishaLegs: 2, adjusted: 1, avghead: 1 };
+  var fq = fr && fr.ipp ? rank[fr.scaleFrom] || 0 : 0, sq = sr && sr.ipp ? rank[sr.scaleFrom] || 0 : 0;
+  var fi = fr && fr.ipp || null, si = sr && sr.ipp || null, canBridge = fr && sr && fr.head && sr.head;
+  if (canBridge && fq > sq) { si = fi * fr.head / sr.head; sq = fq; }
+  else if (canBridge && sq > fq) { fi = si * sr.head / fr.head; fq = sq; }
+  var best = Math.max(fq, sq), from = best === 3 ? 'ref' : best === 2 ? 'keisha' : best === 1 ? 'guess' : null;
+  return { fi: fi, si: si, from: from };
 }
 
-// Sizes in inches. Front width + side depth = one number. Front only = a range.
 function sizes(fr, sr) {
-  var b = bridge(fr, sr), out = { from: b.from, items: {} };
+  var b = bridge(fr, sr), out = { from: b.from, fi: b.fi, si: b.si, items: {} };
   if (!b.fi && !b.si) return out;
-  [['bust', 'bu', 'dBust'], ['under', 'ub', 'dUnder'], ['waist', 'wa', 'dWaist'], ['hips', 'hi', 'dHip']].forEach(function (k) {
+  [['bust', 'bu', 'dBust'], ['under', 'ub', 'dUnder'], ['waist', 'wa', 'dWaist'], ['hips', 'hi', 'dHip'],
+   ['thigh', 'th', 'dThigh'], ['calf', 'ca', 'dCalf'], ['arm', 'ua', 'dArm']].forEach(function (k) {
     var W = fr && fr[k[1]] && b.fi ? fr[k[1]] * b.fi : null;
     var D = sr && sr[k[2]] && b.si ? sr[k[2]] * b.si : null;
     if (W && D) out.items[k[0]] = { exact: ellipseC(W, D), w: W, d: D };
-    else if (W) out.items[k[0]] = { lo: ellipseC(W, 0.65 * W), hi: ellipseC(W, 1.05 * W), w: W };
+    else if (W) out.items[k[0]] = { lo: ellipseC(W, 0.65 * W), hi: ellipseC(W, 1.05 * W), w: W, mid: ellipseC(W, 0.85 * W) };
     else if (D) out.items[k[0]] = { d: D };
   });
-  var bu = out.items.bust, ub = out.items.under;
-  if (bu && ub && bu.exact && ub.exact) {
-    var diff = bu.exact - ub.exact;
-    out.cup = { band: bandFor(ub.exact), cup: cupFor(diff), diff: diff };
+  function val(k) { var it = out.items[k]; return it ? (it.exact || it.mid || null) : null; }
+  out.val = val;
+  // Bra: method 1 = bust minus underbust; method 2 = breast width.
+  var bu = out.items.bust, ub = out.items.under, cup = {};
+  if (bu && ub && (bu.exact || bu.mid) && (ub.exact || ub.mid)) {
+    var bv = bu.exact || bu.mid, uv = ub.exact || ub.mid;
+    cup.band = bandFor(uv); cup.m1 = bv - uv; cup.m1Exact = !!(bu.exact && ub.exact);
   }
-  if (sr && sr.foot && b.si) { var L = sr.foot * b.si; out.shoe = { foot: L, size: shoeFor(L) }; }
+  if (fr && fr.brBase && b.fi) {
+    var baseIn = fr.brBase * b.fi, band = cup.band || (ub && (ub.exact || ub.mid) ? bandFor(ub.exact || ub.mid) : null);
+    if (band) { cup.band = band; cup.m2 = baseIn - (6 + 0.25 * (band - 36)); cup.baseIn = baseIn; }
+  }
+  if (cup.m1 != null || cup.m2 != null) {
+    var idx = [cup.m1, cup.m2].filter(function (x) { return x != null; });
+    cup.index = idx.reduce(function (s, x) { return s + x; }, 0) / idx.length;
+    cup.cup = cupFor(cup.index);
+    if (cup.m1 != null && cup.m2 != null && Math.abs(cup.m1 - cup.m2) > 2) cup.disagree = true;
+    out.cup = cup;
+  }
+  // Breast volume (Qiao's formula): needs nipple-to-edge and nipple-to-fold from the front, projection from the side.
+  if (fr && fr.breast && sr && sr.brProj && b.fi && b.si) {
+    var MP = sr.brProj * b.si, vols = [];
+    ['L', 'R'].forEach(function (s) {
+      var q = fr.breast[s];
+      if (q.mr && q.lr && q.ir) {
+        var V = Math.PI / 3 * MP * MP * (q.mr * b.fi + q.lr * b.fi + q.ir * b.fi - MP);
+        if (V > 0) vols.push(V * 16.387);
+      }
+    });
+    if (vols.length) out.qiao = vols;
+  }
+  if (sr && sr.foot && b.si) { var L = sr.foot * b.si; out.shoe = { foot: L, size: shoeFor(L), from: 'side' }; }
+  out.clothes = clothing(val('bust'), val('waist'), val('hips'));
   return out;
 }
 
+/* ================= Labels (modelsheet words) ================= */
+var LEVELS = [['Thin', 0.40], ['Slim', 0.44], ['Average', 0.49], ['Mid Size', 0.54], ['Thick', 0.59], ['Thicker', 0.64], ['Thickest', 0.69], ['BBW', 0.79], ['SSBBW', 0.90], ['USSBBW', Infinity]];
+function levelFor(whtr) { for (var i = 0; i < LEVELS.length; i++) if (whtr < LEVELS[i][1]) return i; return LEVELS.length - 1; }
+
+// d: { heightIn, waist, hips, bust, shW, hiW, armW, thighW, muscular }  (inches; circumferences for waist/hips/bust)
+function bodyType(d) {
+  if (!(d.heightIn > 0 && d.waist > 0)) return null;
+  var whtr = d.waist / d.heightIn, L = levelFor(whtr), name = LEVELS[L][0], why = 'waist ÷ height ' + whtr.toFixed(2);
+  var hipsBig = d.hips > 0 && d.hips / d.heightIn >= 0.70;
+  var wh = d.hips > 0 ? d.waist / d.hips : null, wb = d.bust > 0 ? d.waist / d.bust : null;
+  var round = wh != null && wh >= 0.95 && (wb == null || wb >= 0.95);
+  var curvy = wh != null && wh <= 0.75, chubby = wh != null && wh >= 0.85;
+  var invTri = d.shW > 0 && d.hiW > 0 && d.shW > d.hiW * 1.05;
+  var broad = d.shW > 0 && d.hiW > 0 && d.shW >= d.hiW * 0.95;
+  var thickLimbs = (d.thighW > 0 && d.thighW / d.heightIn >= 0.14) || (d.armW > 0 && d.armW / d.heightIn >= 0.075);
+  var even = wh != null && wh >= 0.85 && wh <= 1.05;
+  var chunky = L >= 4 && (d.muscular || ((thickLimbs || broad) && even));
+  var short = d.heightIn < 63, shorter = d.heightIn < 64;
+  var pick = name;
+  if (L <= 2 && short) pick = 'Petite';
+  else if (L === 1 || L === 2) {
+    if (hipsBig) pick = 'Slim Thick'; else if (L === 2 && curvy) pick = 'Curvy'; else if (invTri) pick = 'Upside Down Triangle';
+  } else if (L >= 3 && L <= 6) {
+    if (round && !hipsBig && !curvy) pick = 'Meatball';
+    else if (chunky) pick = 'Chunky';
+    else if (L === 3 && hipsBig) pick = 'Mid Thick';
+    else if (L <= 4 && curvy) pick = 'Curvy';
+    else if (L <= 4 && chubby) pick = 'Chubby';
+    else if (L <= 4 && invTri) pick = 'Upside Down Triangle';
+  }
+  void shorter;
+  return { name: pick, level: L, levelName: name, whtr: whtr, why: why };
+}
+function bodyShape(bust, waist, hips, shW, hiW) {
+  if (!(waist > 0 && hips > 0)) return null;
+  var top = bust > 0 ? bust : null;
+  if (top && Math.abs(top - hips) / hips <= 0.05 && waist <= 0.75 * Math.min(top, hips)) return 'Hourglass';
+  if (waist >= 0.9 * hips && (!top || waist >= 0.9 * top)) return 'Apple';
+  if (top && hips > top * 1.05) return 'Pear';
+  if ((top && top > hips * 1.05) || (shW > 0 && hiW > 0 && shW > hiW * 1.05)) return 'Inverted triangle';
+  if (!top && hips > 0 && shW > 0 && hiW > shW * 1.05) return 'Pear';
+  return 'Rectangle';
+}
+function groupFor(level) { return level <= 2 ? 'thin' : level <= 5 ? 'mid' : level === 6 ? 'plus' : 'bbw'; }
+function pickByRatio(list, ratio) {            // waist ÷ hips: 1.0 = no curve (first item) to 0.6 = most curve (last)
+  var n = list.length, t = (1.0 - ratio) / 0.4, i = Math.round(t * (n - 1));
+  return list[Math.max(0, Math.min(n - 1, i))];
+}
+function waistPhrase(level, ratio, shW, hiW) {
+  var g = groupFor(level), key = g === 'bbw' ? 'waist_bbw' : g === 'plus' ? 'waist_plus' : g === 'mid' ? 'waist_mid' : 'waist_thin';
+  var list = TERMS[key];
+  if (key === 'waist_plus') {
+    if (ratio > 1.0) return list[13];
+    if (shW > 0 && hiW > 0 && shW > hiW * 1.05) return list[12];
+    return pickByRatio(list.slice(0, 12), ratio);
+  }
+  return pickByRatio(list, ratio);
+}
+// Closest phrase from a modelsheet list by length and fullness words.
+var FULL_WORDS = ['very thin', 'thin', 'slim', 'lean', 'average', 'slightly full', 'full', 'thick', 'heavy', 'very full', 'very thick', 'very heavy', 'enormous', 'enormously'];
+var FULL_RANK = { 'very thin': 0, 'thin': 0.5, 'slim': 1, 'lean': 1, 'average': 2, 'slightly full': 2.5, 'full': 3, 'thick': 4, 'heavy': 4, 'very full': 4.5, 'very thick': 5, 'very heavy': 5, 'enormous': 6, 'enormously': 6 };
+function phraseFor(list, lenClass, fullRank) {
+  var best = null, bestScore = -Infinity;
+  list.forEach(function (ph) {
+    var low = ph.toLowerCase(), head = low.split(' — ')[0], s = 0, fr = null;
+    FULL_WORDS.slice().sort(function (x, y) { return y.length - x.length; }).some(function (w) { if (new RegExp('\\b' + w + '\\b').test(head)) { fr = FULL_RANK[w]; return true; } return false; });
+    s += fr == null ? -3 : -Math.abs(fr - fullRank);
+    var len = /\blong\b/.test(head) ? 'long' : /\bshort\b/.test(head) ? 'short' : /average length|average/.test(head) ? 'average' : null;
+    if (len && lenClass) s += len === lenClass ? 1 : -0.5;
+    if (s > bestScore) { bestScore = s; best = ph; }
+  });
+  return best;
+}
+// Width (or circumference) compared with height, turned into a fullness rank 0-6 (my cutoffs).
+function fullRankFor(ratio, cuts) { for (var i = 0; i < cuts.length; i++) if (ratio < cuts[i]) return i; return cuts.length; }
+var THIGH_CUTS = [0.08, 0.10, 0.12, 0.14, 0.17, 0.21];     // one thigh's front width ÷ height
+var ARM_CUTS = [0.045, 0.055, 0.065, 0.075, 0.09, 0.11];   // upper arm front width ÷ height
+function lenClassFor(ratio, lo, hi) { return ratio == null ? null : ratio < lo ? 'short' : ratio > hi ? 'long' : 'average'; }
+
+function breastLengthWord(heads) {
+  var cuts = [0.45, 0.6, 0.75, 0.9, 1.05, 1.25, 1.5], i = 0;
+  while (i < cuts.length && heads >= cuts[i]) i++;
+  return TERMS.breast_length[i];
+}
+function breastProjWord(heads, baseOverProj) {
+  if (baseOverProj > 2 && heads < 0.35) return TERMS.breast_projection[6];
+  var cuts = [0.1, 0.2, 0.35, 0.5, 0.7], i = 0;
+  while (i < cuts.length && heads >= cuts[i]) i++;
+  return TERMS.breast_projection[i];
+}
+function assProjWord(heads, buHeight) {
+  if (buHeight != null && buHeight < 0.47) return TERMS.ass_projection[2];             // Dropped
+  if (heads < 0.15) return TERMS.ass_projection[0];
+  if (heads < 0.35) return TERMS.ass_projection[3];
+  if (heads < 0.6) return TERMS.ass_projection[4];
+  if (heads < 0.9) return TERMS.ass_projection[5];
+  return TERMS.ass_projection[6];
+}
+
 if (typeof module !== 'undefined') module.exports = {
-  STEPS: STEPS, BANDS: BANDS, REFS: REFS, grade: grade, compute: compute, fmtFtIn: fmtFtIn, refInches: refInches,
-  ellipseC: ellipseC, cupFor: cupFor, bandFor: bandFor, shoeFor: shoeFor, bridge: bridge, sizes: sizes
+  TERMS: TERMS, REFS: REFS, STEPS: STEPS, CURVES: CURVES, BANDS: BANDS, refInches: refInches, compute: compute, bridge: bridge, sizes: sizes,
+  sliceVolume: sliceVolume, smoothPath: smoothPath, ellipseC: ellipseC, cupFor: cupFor, bandFor: bandFor, shoeFor: shoeFor,
+  clothing: clothing, bodyType: bodyType, bodyShape: bodyShape, waistPhrase: waistPhrase, phraseFor: phraseFor, fmtFtIn: fmtFtIn,
+  breastLengthWord: breastLengthWord, breastProjWord: breastProjWord, assProjWord: assProjWord, fullRankFor: fullRankFor, THIGH_CUTS: THIGH_CUTS, ARM_CUTS: ARM_CUTS, lenClassFor: lenClassFor, levelFor: levelFor
 };
 
 /* ================= Page ================= */
 if (typeof document !== 'undefined') (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var cv = $('cv'), ctx = cv.getContext('2d');
-  var dragKey = null, fit = 1;
-
+  var cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
   function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
 
-  var S = Object.assign({ keisha: true, widths: true, height: true, sizes: false, extras: false, headGuess: false, grid: true, prev: null },
-                        load('pc-settings-v3', {}));
+  var S = Object.assign({ keisha: true, muscular: false, widths: true, height: true, sizes: false, breast: false, extras: false,
+    limbs: false, face: false, turn: false, curves: false, grid: true, prev: null }, load('pc-settings-v5', {}));
   function newView() {
-    return { img: null, name: 'picture', points: {}, skipped: {}, placed: [], zoom: 1, pose: 'stand',
-             ref1: 'door', ref1n: 80, ref2on: false, ref2: 'counter', ref2n: 36, method: 'same', finder: false, shoes: 0 };
+    return { img: null, name: 'picture', points: {}, skipped: {}, placed: [], curves: {}, pose: 'stand',
+      ref1: 'door', ref1n: 80, ref2on: false, ref2: 'counter', ref2n: 36, method: 'same', finder: false, shoes: 0,
+      zoom: 1, cx: 0, cy: 0 };
   }
   var V = { front: newView(), side: newView() }, cur = 'front';
+  var armed = null, selected = null, tracing = null, fit = 1;
+  var pointers = {}, press = null, pinch = null;
   function v() { return V[cur]; }
-  function saveSettings() { store('pc-settings-v3', S); }
+  function saveSettings() { store('pc-settings-v5', S); }
 
-  /* ---- options ---- */
-  function optsFor(name) {
-    var w = V[name], refs = [refInches(w.ref1, w.ref1n), w.ref2on ? refInches(w.ref2, w.ref2n) : null];
-    return { view: name, lying: w.pose === 'lie', heightOn: S.height, refs: refs, method: w.method, finder: w.finder,
-             shoes: w.shoes, headGuess: S.headGuess, imgH: w.img ? w.img.naturalHeight : 0 };
+  /* ---------- what is switched on ---------- */
+  function floorRefChosen(w) {
+    var a = refById(w.ref1).kind, b = w.ref2on ? refById(w.ref2).kind : 'any';
+    return (!a || a === 'floor' || a === 'point') || (!b || b === 'floor' || b === 'point');
+  }
+  function groupOn(g, name) {
+    var w = V[name], lying = w.pose === 'lie';
+    switch (g) {
+      case 'h': case 's': return true;
+      case 'w': return S.widths || S.sizes;
+      case 'bu': case 'ss': return S.sizes;
+      case 'bd': case 'bds': return S.breast;
+      case 'x': return S.extras;
+      case 'lm': case 'lms': return S.limbs;
+      case 'fh': return S.face;
+      case 'an': return S.turn;
+      case 'sf': return S.sizes || S.extras || S.limbs;
+      case 'r': return S.height;
+      case 'r2': return S.height && w.ref2on;
+      case 'z': return S.height && !lying && w.method === 'floor' && !w.finder && floorRefChosen(w);
+      case 'ze': return S.height && !lying && w.method === 'floor' && w.finder && floorRefChosen(w);
+    }
+    return false;
   }
   function enabled(st, name) {
     name = name || cur;
-    var w = V[name], side = name === 'side', lying = w.pose === 'lie';
-    if (st.view === 'front' && side) return false;
-    if (st.view === 'side' && !side) return false;
-    switch (st.group) {
-      case 'w': return S.widths || S.sizes;
-      case 'bu': case 'ss': return S.sizes;
-      case 'x': return S.extras;
-      case 'sf': return S.sizes || S.extras;
-      case 'r': return S.height;
-      case 'r2': return S.height && w.ref2on;
-      case 'z': return S.height && !lying && w.method === 'floor' && !w.finder;
-      case 'ze': return S.height && !lying && w.method === 'floor' && w.finder;
-    }
-    return true;
+    if (st.view === 'front' && name === 'side') return false;
+    if (st.view === 'side' && name !== 'side') return false;
+    return st.g.some(function (g) { return groupOn(g, name); });
   }
   function activePoints(name) {
     var w = V[name], out = {};
     STEPS.forEach(function (st) { if (w.points[st.key] && enabled(st, name)) out[st.key] = w.points[st.key]; });
     return out;
   }
+  function optsFor(name) {
+    var w = V[name], refs = [], names = [];
+    if (S.height) {
+      refs = [refInches(w.ref1, w.ref1n), w.ref2on ? refInches(w.ref2, w.ref2n) : undefined];
+      names = [w.ref1, w.ref2on ? w.ref2 : null];
+    }
+    return { view: name, lying: w.pose === 'lie', heightOn: true, refs: refs, refNames: names, method: w.method, finder: w.finder,
+      shoes: w.shoes, keisha: S.keisha, turnFix: S.turn, imgH: w.img ? w.img.naturalHeight : 0 };
+  }
   function results(name) { return compute(activePoints(name), optsFor(name)); }
   function nextStep() {
+    if (armed) return stepByKey(armed);
     var w = v();
-    for (var i = 0; i < STEPS.length; i++) {
-      var st = STEPS[i];
-      if (enabled(st) && !w.points[st.key] && !w.skipped[st.key]) return st;
-    }
+    for (var i = 0; i < STEPS.length; i++) { var st = STEPS[i]; if (enabled(st) && !w.points[st.key] && !w.skipped[st.key]) return st; }
     return null;
   }
   function stepText(st) {
     var w = v(), lying = w.pose === 'lie';
-    if (st.group === 'r' || st.group === 'r2') {
-      var n = st.group === 'r' ? 1 : 2, d = refById(st.group === 'r' ? w.ref1 : w.ref2), isTop = /Top$/.test(st.key);
+    if (st.g[0] === 'r' || st.g[0] === 'r2') {
+      var n = st.g[0] === 'r' ? 1 : 2, d = refById(n === 1 ? w.ref1 : w.ref2), isTop = /Top$/.test(st.key);
       var nm = d.custom ? 'your custom object' : d.name.replace(/\s*\(.*$/, '').replace(/,.*$/, '').toLowerCase();
-      if (lying) return { label: 'Reference ' + n + (isTop ? ', one end' : ', other end'),
-        hint: isTop ? 'One end of the ' + nm + ' (for a mattress: the head end).' : 'The opposite end, along the same straight line.' };
+      if (lying && (d.kind === 'len' || !d.kind || d.kind === 'floor')) return { label: 'Reference ' + n + (isTop ? ', one end' : ', other end') + ' (' + nm + ')',
+        hint: isTop ? 'One end of the ' + nm + '.' : 'The opposite end, along the same straight line.' };
       return { label: st.label + ' (' + nm + ')', hint: isTop ? (d.top || 'The top of the ' + nm + '.') : (d.bot || 'Where the ' + nm + ' meets the floor, straight below the top.') };
     }
     return { label: st.label, hint: st.hint };
   }
 
-  /* ---- layout ---- */
+  /* ---------- view: zoom and pan ---------- */
   function scale() { return fit * v().zoom; }
+  function stageSize() { return { W: stage.clientWidth, H: stage.clientHeight }; }
   function computeFit() {
     var w = v(); if (!w.img) return;
-    var st = $('stage'), aw = st.clientWidth - 16, ah = st.clientHeight - 16;
-    if (ah < 200) ah = window.innerHeight * 0.7;
-    fit = Math.min(aw / w.img.naturalWidth, ah / w.img.naturalHeight);
+    var z = stageSize();
+    fit = Math.min(z.W / w.img.naturalWidth, z.H / w.img.naturalHeight) * 0.96;
     if (!(fit > 0)) fit = 1;
   }
-  function resize() {
-    var w = v();
-    if (!w.img) { cv.hidden = true; $('empty').hidden = false; updatePanel(); return; }
-    cv.hidden = false; $('empty').hidden = true;
-    var s = scale();
-    cv.width = Math.round(w.img.naturalWidth * s);
-    cv.height = Math.round(w.img.naturalHeight * s);
+  function resetView() { var w = v(); if (!w.img) return; w.zoom = 1; w.cx = w.img.naturalWidth / 2; w.cy = w.img.naturalHeight / 2; computeFit(); }
+  function toImg(clientX, clientY) {
+    var r = cv.getBoundingClientRect(), z = stageSize(), s = scale(), w = v();
+    return { x: (clientX - r.left - z.W / 2) / s + w.cx, y: (clientY - r.top - z.H / 2) / s + w.cy };
+  }
+  function clampPt(pt) { var img = v().img; return { x: Math.max(0, Math.min(img.naturalWidth, pt.x)), y: Math.max(0, Math.min(img.naturalHeight, pt.y)) }; }
+  function setZoom(z, anchorScreen) {
+    var w = v(); if (!w.img) return;
+    z = Math.max(1, Math.min(16, z));
+    var size = stageSize(), a = anchorScreen || { x: size.W / 2, y: size.H / 2 };
+    var before = { x: (a.x - size.W / 2) / scale() + w.cx, y: (a.y - size.H / 2) / scale() + w.cy };
+    w.zoom = z;
+    w.cx = before.x - (a.x - size.W / 2) / scale();
+    w.cy = before.y - (a.y - size.H / 2) / scale();
+    $('zoom').value = z; $('zoomVal').textContent = (Math.round(z * 4) / 4) + '×';
     draw();
   }
 
-  /* ---- drawing ---- */
-  function clipLine(px, py, dx, dy, W, H) {
+  /* ---------- drawing ---------- */
+  function clipLine(px, py, dx, dy, x0, y0, x1, y1) {
     var ts = [];
-    if (Math.abs(dx) > 1e-9) [0, W].forEach(function (x) { var t = (x - px) / dx, y = py + t * dy; if (y >= -0.5 && y <= H + 0.5) ts.push(t); });
-    if (Math.abs(dy) > 1e-9) [0, H].forEach(function (y) { var t = (y - py) / dy, x = px + t * dx; if (x >= -0.5 && x <= W + 0.5) ts.push(t); });
+    if (Math.abs(dx) > 1e-9) [x0, x1].forEach(function (x) { var t = (x - px) / dx, y = py + t * dy; if (y >= y0 - 0.5 && y <= y1 + 0.5) ts.push(t); });
+    if (Math.abs(dy) > 1e-9) [y0, y1].forEach(function (y) { var t = (y - py) / dy, x = px + t * dx; if (x >= x0 - 0.5 && x <= x1 + 0.5) ts.push(t); });
     if (ts.length < 2) return null;
     var t0 = Math.min.apply(null, ts), t1 = Math.max.apply(null, ts);
     return [{ x: px + t0 * dx, y: py + t0 * dy }, { x: px + t1 * dx, y: py + t1 * dy }];
   }
 
-  function render(c, s, lw, W, H, withLegend) {
-    var w = v(), img = w.img, p = activePoints(cur), o = optsFor(cur), r = compute(p, o), ax = r.ax;
-    c.clearRect(0, 0, W, H);
-    c.drawImage(img, 0, 0, W, H);
+  // Draws the picture and every overlay. Overlays are drawn in screen pixels so they stay sharp at any zoom.
+  function render(c, s, W, H, cx, cy, dpr, lw, withLegend) {
+    var w = v(), img = w.img, p = activePoints(cur), r = compute(p, optsFor(cur)), ax = r.ax;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = '#030309'; c.fillRect(0, 0, W, H);
+    c.imageSmoothingEnabled = s < 3;
+    c.setTransform(dpr * s, 0, 0, dpr * s, dpr * (W / 2 - cx * s), dpr * (H / 2 - cy * s));
+    c.drawImage(img, 0, 0);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.imageSmoothingEnabled = true;
+    function sc(pt) { return { x: (pt.x - cx) * s + W / 2, y: (pt.y - cy) * s + H / 2 }; }
+    var tl = sc({ x: 0, y: 0 }), br = sc({ x: img.naturalWidth, y: img.naturalHeight });
+    var bx0 = Math.max(0, tl.x), by0 = Math.max(0, tl.y), bx1 = Math.min(W, br.x), by1 = Math.min(H, br.y);
     var font = Math.max(12, Math.round(lw * 6.5));
     c.font = '600 ' + font + 'px Rajdhani, -apple-system, Helvetica, Arial, sans-serif';
     c.textBaseline = 'middle';
 
     function label(x, y, text, color) {
       var tw = c.measureText(text).width, pad = lw * 2;
-      x = Math.max(pad, Math.min(W - tw - pad, x));
-      y = Math.max(font, Math.min(H - font, y));
-      c.fillStyle = 'rgba(5,5,14,.72)';
-      c.fillRect(x - pad, y - font * 0.7, tw + pad * 2, font * 1.4);
+      x = Math.max(bx0 + pad, Math.min(bx1 - tw - pad, x)); y = Math.max(by0 + font, Math.min(by1 - font, y));
+      c.fillStyle = 'rgba(5,5,14,.72)'; c.fillRect(x - pad, y - font * 0.7, tw + pad * 2, font * 1.4);
       c.fillStyle = color; c.fillText(text, x, y);
     }
-    // Line across her body (perpendicular to the body axis) through image point pt.
-    function xline(pt, color, dash, text, side) {
-      var seg = clipLine(pt.x * s, pt.y * s, -ax.uy, ax.ux, W, H);
-      if (!seg) return;
+    function xline(pt, color, dash, text, side) {      // line across her body through pt
+      var q = sc(pt), segm = clipLine(q.x, q.y, -ax.uy, ax.ux, bx0, by0, bx1, by1);
+      if (!segm) return;
       c.save(); c.strokeStyle = color; c.lineWidth = lw; c.setLineDash(dash || []);
-      c.beginPath(); c.moveTo(seg[0].x, seg[0].y); c.lineTo(seg[1].x, seg[1].y); c.stroke(); c.restore();
+      c.beginPath(); c.moveTo(segm[0].x, segm[0].y); c.lineTo(segm[1].x, segm[1].y); c.stroke(); c.restore();
       if (text) {
-        var e = seg[0].x + seg[0].y * 0.001 > seg[1].x + seg[1].y * 0.001 ? seg[0] : seg[1];
-        var b = e === seg[0] ? seg[1] : seg[0];
-        var end = side === 'right' ? e : b, tw = c.measureText(text).width;
-        label(side === 'right' ? end.x - tw - lw * 6 : end.x + lw * 4, end.y, text, color);
+        var right = segm[0].x > segm[1].x ? segm[0] : segm[1], left = right === segm[0] ? segm[1] : segm[0], tw = c.measureText(text).width;
+        if (side === 'right') label(right.x - tw - lw * 6, right.y, text, color); else label(left.x + lw * 4, left.y, text, color);
       }
     }
     function hline(y, color, dash, text) {
+      var q = sc({ x: 0, y: y }); if (q.y < by0 || q.y > by1) return;
       c.save(); c.strokeStyle = color; c.lineWidth = lw; c.setLineDash(dash || []);
-      c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); c.restore();
-      if (text) label(lw * 4, y, text, color);
+      c.beginPath(); c.moveTo(bx0, q.y); c.lineTo(bx1, q.y); c.stroke(); c.restore();
+      if (text) label(bx0 + lw * 4, q.y, text, color);
     }
     function seg(a, b, color, width, dash) {
-      if (!a || !b) return;
+      if (!a || !b) return; var A = sc(a), B = sc(b);
       c.save(); c.strokeStyle = color; c.lineWidth = width; c.setLineDash(dash || []);
-      c.beginPath(); c.moveTo(a.x * s, a.y * s); c.lineTo(b.x * s, b.y * s); c.stroke(); c.restore();
+      c.beginPath(); c.moveTo(A.x, A.y); c.lineTo(B.x, B.y); c.stroke(); c.restore();
     }
     function offset(pt, u) { return { x: pt.x + ax.ux * u, y: pt.y + ax.uy * u }; }
 
-    // Head grid
     if (S.grid && r.head && p.crown) {
-      var maxK = r.total ? Math.ceil(r.total / r.head) + 1 : 12;
-      for (var k = 0; k <= maxK; k++) {
-        var q = offset(p.crown, k * r.head);
-        if (q.x < -img.naturalWidth || q.y > img.naturalHeight * 2 || q.x > img.naturalWidth * 2) break;
-        xline(q, 'rgba(184,146,11,.85)', [lw * 4, lw * 3], k === 0 ? 'crown' : k + (k === 1 ? ' head' : ' heads'), 'right');
-      }
+      var maxK = r.total ? Math.ceil(r.total / r.head) + 1 : 14;
+      for (var k = 0; k <= maxK; k++) xline(offset(p.crown, k * r.head), 'rgba(184,146,11,.85)', [lw * 4, lw * 3], k === 0 ? 'crown' : k + (k === 1 ? ' head' : ' heads'), 'right');
     }
-    // Halfway and crotch target (front)
     if (cur === 'front' && r.total) {
       xline(offset(p.crown, r.total * 0.5), 'rgba(232,220,200,.75)', [lw * 2, lw * 2], 'halfway (50%)', 'left');
       if (S.keisha) xline(offset(p.crown, r.total * 0.53), 'rgba(63,174,102,.95)', [], 'crotch target (47% up)', 'left');
     }
-    // Widths
     [['shL', 'shR', '#7fb4e6'], ['waL', 'waR', '#c98fe0'], ['hiL', 'hiR', '#e6c07f'], ['buL', 'buR', '#f08a8a'], ['ubL', 'ubR', '#e2a6c0'],
-     ['hdL', 'hdR', '#9fd6a8'], ['nkL', 'nkR', '#9fd6a8']].forEach(function (pr) {
-      var A = p[pr[0]], B = p[pr[1]];
-      if (A && B) seg(A, B, pr[2], lw * 1.5);
-    });
-    // Side depths
-    [['brFront', 'bkBust', '#f08a8a'], ['ubFront', 'ubBack', '#e2a6c0'], ['beFront', 'bkWaist', '#c98fe0'], ['hipFront', 'buBack', '#e6c07f'], ['heel', 'toe', '#9fd6a8']]
+     ['hdL', 'hdR', '#9fd6a8'], ['nkL', 'nkR', '#9fd6a8'], ['uaL', 'uaR', '#9fd6a8'], ['faL', 'faR', '#9fd6a8'], ['thL', 'thR', '#9fd6a8'], ['caL', 'caR', '#9fd6a8'],
+     ['bLi', 'bLo', '#f08a8a'], ['bRi', 'bRo', '#f08a8a'], ['bLt', 'bLb', '#f0b0b0'], ['bRt', 'bRb', '#f0b0b0'], ['nsL', 'nsR', '#9fd6a8'], ['eyL', 'eyR', '#9fd6a8'],
+     ['chkL', 'chkR', '#5fd0e0'], ['armTop', 'elbow', '#9fd6a8'], ['elbow', 'wrist', '#9fd6a8'], ['wrist', 'tip', '#9fd6a8'], ['knee', 'ankle', '#9fd6a8'],
+     ['brFront', 'bkBust', '#f08a8a'], ['ubFront', 'ubBack', '#e2a6c0'], ['beFront', 'bkWaist', '#c98fe0'], ['hipFront', 'buBack', '#e6c07f'], ['heel', 'toe', '#9fd6a8'],
+     ['tdF', 'tdB', '#9fd6a8'], ['cdF', 'cdB', '#9fd6a8'], ['adF', 'adB', '#9fd6a8'], ['brTop', 'brFold', '#f0b0b0']]
       .forEach(function (pr) { seg(p[pr[0]], p[pr[1]], pr[2], lw * 1.5); });
     if (cur === 'side' && p.navelS) xline(p.navelS, 'rgba(232,220,200,.7)', [lw * 2, lw * 2], 'navel', 'left');
-    if (cur === 'front' && p.wrist && p.tip) seg(p.wrist, p.tip, '#9fd6a8', lw * 1.5);
-    // References and eye level
     if (S.height) {
       seg(p.r1Top, p.r1Bot, '#5fd0e0', lw * 2.5);
       seg(p.r2Top, p.r2Bot, '#7fe0a0', lw * 2.5);
-      if (w.pose !== 'lie' && w.method === 'floor') {
+      if (w.pose !== 'lie' && w.method === 'floor' && floorRefChosen(w)) {
         if (w.finder) {
           [['e1a', 'e1b'], ['e2a', 'e2b']].forEach(function (pr) {
             var A = p[pr[0]], B = p[pr[1]]; if (!A || !B) return;
-            var sg = clipLine(A.x * s, A.y * s, (B.x - A.x) * s, (B.y - A.y) * s, W, H);
+            var a2 = sc(A), b2 = sc(B), sg = clipLine(a2.x, a2.y, b2.x - a2.x, b2.y - a2.y, 0, 0, W, H);
             if (sg) { c.save(); c.strokeStyle = 'rgba(95,208,224,.8)'; c.lineWidth = lw; c.setLineDash([lw * 3, lw * 3]);
               c.beginPath(); c.moveTo(sg[0].x, sg[0].y); c.lineTo(sg[1].x, sg[1].y); c.stroke(); c.restore(); }
           });
-          if (r.vp && r.vp.x * s > -W && r.vp.x * s < 2 * W) {
-            c.save(); c.fillStyle = '#5fd0e0'; c.beginPath(); c.arc(r.vp.x * s, r.vp.y * s, lw * 5, 0, Math.PI * 2); c.fill(); c.restore();
-          }
+          if (r.vp) { var vq = sc(r.vp); c.save(); c.fillStyle = '#5fd0e0'; c.beginPath(); c.arc(vq.x, vq.y, lw * 5, 0, Math.PI * 2); c.fill(); c.restore(); }
         }
-        if (r.hzY != null) hline(r.hzY * s, 'rgba(95,208,224,.95)', [lw * 6, lw * 3], 'eye level');
-        else if (!w.finder && !w.points.hz) hline(H / 2, 'rgba(95,208,224,.45)', [lw * 2, lw * 4], 'eye level? click to set');
+        if (r.hzY != null) hline(r.hzY, 'rgba(95,208,224,.95)', [lw * 6, lw * 3], 'eye level');
+        else if (!w.finder && !w.points.hz) hline(img.naturalHeight / 2, 'rgba(95,208,224,.45)', [lw * 2, lw * 4], 'eye level? click to set');
       }
     }
+    // Curves
+    if (S.curves) CURVES.forEach(function (cd) {
+      if (cd.view !== cur) return;
+      var pts = w.curves[cd.id]; if (!pts || !pts.length) return;
+      var path = pts.length >= 3 ? smoothPath(pts, cd.loop) : pts;
+      var on = tracing === cd.id;
+      c.save(); c.strokeStyle = on ? '#ffd36b' : '#f0a060'; c.lineWidth = lw * 1.6;
+      c.beginPath(); path.forEach(function (q, i) { var z = sc(q); if (i) c.lineTo(z.x, z.y); else c.moveTo(z.x, z.y); }); c.stroke();
+      c.fillStyle = on ? '#ffd36b' : '#f0a060';
+      pts.forEach(function (q) { var z = sc(q); c.beginPath(); c.arc(z.x, z.y, lw * 2.2, 0, Math.PI * 2); c.fill(); });
+      c.restore();
+      var z0 = sc(pts[0]); label(z0.x + lw * 5, z0.y - font, cd.label, on ? '#ffd36b' : '#f0a060');
+    });
     // Points
     STEPS.forEach(function (st) {
       var pt = p[st.key]; if (!pt) return;
-      var x = pt.x * s, y = pt.y * s, rad = lw * 4;
-      var col = st.group === 'h' ? '#b8920b' : (st.group === 'w' || st.group === 'bu') ? '#e8dcc8' :
-                (st.group === 's' || st.group === 'ss' || st.group === 'sf' || st.group === 'x') ? '#e2a6c0' : '#5fd0e0';
+      var q = sc(pt), rad = lw * 4;
+      var g = st.g[0];
+      var col = g === 'h' ? '#b8920b' : (g === 'w' || g === 'bu') ? '#e8dcc8' : (g === 'r' || g === 'r2' || g === 'z' || g === 'ze' || g === 'an') ? '#5fd0e0' : '#e2a6c0';
       c.save();
+      if (selected && selected.type === 'pt' && selected.key === st.key && !withLegend) {
+        c.strokeStyle = '#ffd36b'; c.lineWidth = lw * 1.5; c.beginPath(); c.arc(q.x, q.y, rad * 2.2, 0, Math.PI * 2); c.stroke();
+      }
       c.fillStyle = col; c.strokeStyle = '#000'; c.lineWidth = lw;
-      c.beginPath(); c.arc(x, y, rad, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.beginPath(); c.arc(q.x, q.y, rad, 0, Math.PI * 2); c.fill(); c.stroke();
       c.fillStyle = '#fff'; c.strokeStyle = 'rgba(0,0,0,.85)'; c.lineWidth = lw * 2.5; c.lineJoin = 'round'; c.miterLimit = 2;
       var txt = st.short || st.label, tw = c.measureText(txt).width;
-      var tx = /L$/.test(st.key) ? x - rad * 1.6 - tw : x + rad * 1.6;
-      if (tx < 0) tx = x + rad * 1.6;
-      if (tx + tw > W) tx = x - rad * 1.6 - tw;
-      c.strokeText(txt, tx, y); c.fillText(txt, tx, y);
+      var tx = /L$/.test(st.key) ? q.x - rad * 1.6 - tw : q.x + rad * 1.6;
+      if (tx < 0) tx = q.x + rad * 1.6;
+      if (tx + tw > W) tx = q.x - rad * 1.6 - tw;
+      c.strokeText(txt, tx, q.y); c.fillText(txt, tx, q.y);
       c.restore();
     });
     if (withLegend) {
@@ -749,242 +1169,431 @@ if (typeof document !== 'undefined') (function () {
       if (lines.length) {
         var lh = font * 1.5, bw = 0;
         lines.forEach(function (t) { bw = Math.max(bw, c.measureText(t).width); });
-        c.fillStyle = 'rgba(5,5,14,.78)';
-        c.fillRect(lw * 4, lw * 4, bw + lw * 8, lines.length * lh + lw * 6);
+        c.fillStyle = 'rgba(5,5,14,.78)'; c.fillRect(lw * 4, lw * 4, bw + lw * 8, lines.length * lh + lw * 6);
         c.fillStyle = '#e8dcc8';
         lines.forEach(function (t, i) { c.fillText(t, lw * 8, lw * 7 + lh * (i + 0.5)); });
       }
     }
+    return { sc: sc };
   }
 
-  function legendLines(r) {
-    var L = [];
-    if (r.heightIn) L.push('Height: ' + fmtFtIn(r.heightIn) + ' ± ' + roundHalf(r.heightErr) + ' in (' + r.heightIn.toFixed(1) + ' in)');
-    if (r.heads) L.push('Head count: ' + r.heads.toFixed(2));
-    if (r.crotch != null) L.push('Crotch: ' + (r.crotch * 100).toFixed(1) + '% of height');
-    if (r.hipSh) L.push('Hips ÷ shoulders: ' + r.hipSh.toFixed(2));
-    if (r.waHi) L.push('Waist ÷ hips: ' + r.waHi.toFixed(2));
-    if (r.brPastBe != null) L.push('Breasts past belly: ' + sgn(r.brPastBe) + ' heads');
-    if (r.bellyHang != null) L.push('Belly hang below navel: ' + sgn(r.bellyHang) + ' heads');
-    if (r.buPast != null) L.push('Butt past upper back: ' + sgn(r.buPast) + ' heads');
-    if (S.sizes) {
-      var z = sizes(results('front'), results('side'));
-      ['bust', 'waist', 'hips'].forEach(function (k) { var it = z.items[k]; if (it && (it.exact || it.lo)) L.push(SIZE_NAMES[k] + ': ' + sizeText(it)); });
-      if (z.cup) L.push('Bra: about ' + z.cup.band + z.cup.cup);
-      if (z.shoe) L.push("Shoe: women's US " + z.shoe.size);
-    }
-    return L;
+  function drawMagnifier(c, W, H, dpr) {
+    if (!press || !press.cur || !v().img) return;
+    var w = v(), img = w.img, s = scale(), m = Math.min(64, s * 3), R = 62;
+    var px = press.cur.x, py = press.cur.y, mx = px, my = py - 110;
+    if (my - R < 4) my = py + 110;
+    var pt = press.hit && press.hit.type === 'pt' ? w.points[press.hit.key] : press.pt;
+    if (!pt) return;
+    c.save();
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.beginPath(); c.arc(mx, my, R, 0, Math.PI * 2); c.closePath();
+    c.fillStyle = '#030309'; c.fill();
+    c.clip();
+    c.setTransform(dpr * m, 0, 0, dpr * m, dpr * (mx - pt.x * m), dpr * (my - pt.y * m));
+    c.imageSmoothingEnabled = false;
+    c.drawImage(img, 0, 0);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var ap = activePoints(cur);
+    Object.keys(ap).forEach(function (k) {
+      if (press.hit && press.hit.type === 'pt' && press.hit.key === k) return;
+      var q = { x: (ap[k].x - pt.x) * m + mx, y: (ap[k].y - pt.y) * m + my };
+      c.fillStyle = 'rgba(226,166,192,.9)'; c.beginPath(); c.arc(q.x, q.y, 4, 0, Math.PI * 2); c.fill();
+    });
+    c.strokeStyle = '#ffd36b'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(mx - R, my); c.lineTo(mx - 5, my); c.moveTo(mx + 5, my); c.lineTo(mx + R, my);
+    c.moveTo(mx, my - R); c.lineTo(mx, my - 5); c.moveTo(mx, my + 5); c.lineTo(mx, my + R); c.stroke();
+    c.restore();
+    c.save(); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.strokeStyle = '#b8920b'; c.lineWidth = 2; c.beginPath(); c.arc(mx, my, R, 0, Math.PI * 2); c.stroke(); c.restore();
   }
 
   function draw() {
-    if (!v().img) return;
-    render(ctx, scale(), 1.5, cv.width, cv.height, false);
+    var w = v();
+    if (!w.img) { cv.hidden = true; $('empty').hidden = false; updatePanel(); return; }
+    cv.hidden = false; $('empty').hidden = true;
+    var z = stageSize(), dpr = window.devicePixelRatio || 1;
+    if (cv.width !== Math.round(z.W * dpr) || cv.height !== Math.round(z.H * dpr)) {
+      cv.width = Math.round(z.W * dpr); cv.height = Math.round(z.H * dpr);
+      cv.style.width = z.W + 'px'; cv.style.height = z.H + 'px';
+    }
+    render(ctx, scale(), z.W, z.H, w.cx, w.cy, dpr, 1.5, false);
+    drawMagnifier(ctx, z.W, z.H, dpr);
     updatePanel();
   }
 
-  /* ---- panel ---- */
-  var SIZE_NAMES = { bust: 'Bust', under: 'Underbust', waist: 'Waist', hips: 'Hips (butt)' };
+  /* ---------- panel ---------- */
+  var SIZE_NAMES = { bust: 'Bust', under: 'Underbust', waist: 'Waist', hips: 'Hips (butt)', thigh: 'Thigh', calf: 'Calf', arm: 'Upper arm' };
   function roundHalf(x) { return (Math.round(x * 2) / 2).toFixed(1).replace(/\.0$/, ''); }
   function sgn(x) { return (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(2); }
-  function sizeText(it) { return it.exact ? it.exact.toFixed(1) + ' in' : Math.round(it.lo) + '–' + Math.round(it.hi) + ' in'; }
+  function inch(x) { return x.toFixed(1) + ' in'; }
+  function sizeText(it) { return it.exact ? inch(it.exact) : Math.round(it.lo) + '–' + Math.round(it.hi) + ' in'; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
   function card(name, val, cls, note) {
-    return '<div class="res ' + cls + '"><div class="top"><span class="name">' + name + '</span><span class="val">' + val +
+    return '<div class="res ' + (cls || '') + '"><div class="top"><span class="name">' + name + '</span><span class="val">' + val +
       '</span></div>' + (note ? '<div class="note">' + note + '</div>' : '') + '</div>';
   }
-  function gcard(name, val, v_, band, keishaNote, plainNote) {
-    var cls = S.keisha && band ? grade(v_, band) : '';
-    return card(name, val, cls, S.keisha ? keishaNote : plainNote);
-  }
+  function gcard(name, val, x, band, keishaNote, plainNote) { return card(name, val, S.keisha && band ? grade(x, band) : '', S.keisha ? keishaNote : plainNote); }
   function msg(text, kind) { return '<p class="msg ' + (kind || 'info') + '">' + text + '</p>'; }
-  function inchTxt(px, ipp) { return ipp ? ' (' + (px * ipp).toFixed(1) + ' in)' : ''; }
+  function table(rows) { return '<table class="kv">' + rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td>' + x[1] + '</td></tr>'; }).join('') + '</table>'; }
+  function term(t) { var parts = String(t).split(' — '); return '<b>' + esc(parts[0]) + '</b>' + (parts[1] ? ' — ' + esc(parts[1]) : ''); }
 
-  function heightCard(r, name) {
+  function heightCard(r, name, other) {
     var w = V[name], html = '';
-    if (!S.height) return '';
+    if (r.scaleFrom !== 'ref' && other && other.scaleFrom === 'ref' && other.heightIn && other.quality === 'Measured') {
+      return card('Height', 'Measured: ' + fmtFtIn(other.heightIn) + ' <small>\u00b1 ' + roundHalf(other.heightErr) + ' in</small>', '',
+        other.heightIn.toFixed(1) + ' in, measured in the ' + (name === 'side' ? 'front' : 'side') + ' picture. This picture borrows that ruler through her head length.');
+    }
     if (r.heightIn) {
       var how;
-      if (r.scaleFrom === 'head') how = 'Rough guess from her head (assumes an average ' + HEAD_AVG_IN + '-in head). Wrong for very tall or very short characters.';
-      else {
+      if (r.scaleFrom === 'ref') {
         var names = [refById(w.ref1).name];
         if (w.ref2on && r.refCount === 2) names.push(refById(w.ref2).name);
         how = 'Measured with ' + names.join(' + ') + (r.method === 'floor' ? ', using the eye-level line.' : r.method === 'lying' ? ', lying-down mode.' : '.');
-        if (r.heightHow === 'legs') how = 'Estimate: her head is cut off, so this assumes her legs are 47% of her height. ' + how;
-        if (r.heightHow === 'torso') how = 'Estimate: her feet are hidden, so this assumes crown to crotch is 53% of her height. ' + how;
-      }
+        if (r.heightHow === 'legs') how = 'Her head is cut off, so this assumes her legs are 47% of her height. ' + how;
+        if (r.heightHow === 'torso') how = 'Her feet are hidden, so this assumes crown to crotch is 53% of her height. ' + how;
+      } else if (r.scaleFrom === 'keisha') how = 'No reference object, so this uses Keisha’s own head size (' + KEISHA_HEAD_IN.toFixed(1) + ' in, from her spec). It reads right when her head count is on spec.';
+      else if (r.scaleFrom === 'keishaLegs') how = 'No reference and no head, so this uses Keisha’s spec crotch height (47% of 6′11″).';
+      else if (r.scaleFrom === 'adjusted') how = 'No reference object, so this is a guess from her head count: real people with more head-lengths tend to be taller. Very tall characters can still read short.';
+      else how = 'No reference object, so this assumes an average ' + HEAD_AVG_IN + '-in head.';
       if (w.shoes) how += ' Shoes taken off: ' + w.shoes + ' in.';
-      var cls = r.scaleFrom === 'head' || r.heightHow !== 'full' ? 'rough' : '';
-      html += card('Real height', fmtFtIn(r.heightIn) + ' <small>± ' + roundHalf(r.heightErr) + ' in</small>', cls, r.heightIn.toFixed(1) + ' in. ' + how);
-      if (r.refsDisagree) {
-        html += msg('Your two references disagree by ' + Math.round(r.refsDisagree * 100) + '%' +
-          (r.heightEach ? ' (reference 1 says ' + fmtFtIn(r.heightEach[0]) + ', reference 2 says ' + fmtFtIn(r.heightEach[1]) + ')' : '') +
-          '. The AI probably drew one of them at the wrong size. The height above is their average.', 'bad');
-      }
+      var label = r.quality + ': ' + fmtFtIn(r.heightIn) + ' <small>± ' + roundHalf(r.heightErr) + ' in</small>';
+      html += card('Height', label, r.quality === 'Measured' ? '' : 'rough', r.heightIn.toFixed(1) + ' in. ' + how);
+      if (r.refsDisagree) html += msg('Your two references disagree by ' + Math.round(r.refsDisagree * 100) + '%' +
+        (r.heightEach ? ' (reference 1 says ' + fmtFtIn(r.heightEach[0]) + ', reference 2 says ' + fmtFtIn(r.heightEach[1]) + ')' : '') +
+        '. The AI probably drew one of them at the wrong size. The height above is their average.', 'bad');
     } else if (w.img) {
-      if (r.ipp && !r.carried && !r.total && name === 'side') html += msg('Real height needs her crown and soles in this view.', 'info');
-      else if (r.carried) html += msg('Her height is measured in the ' + (name === 'side' ? 'front' : 'side') + ' picture. This picture borrows that ruler through her head length.', 'info');
-      else if (!r.ipp) html += msg('Can’t measure her height yet: click a reference object' + (w.method === 'floor' && w.pose !== 'lie' ? ' and the eye level' : '') +
-        '. No object of known size in the picture? Then the picture alone can’t show her height.', 'info');
+      html += card('Height', '—', 'rough', !r.head && !(S.keisha && activePoints(name).crotch) ? 'Needs her crown and chin (the head is the backup ruler), or her soles plus a reference object.' :
+        r.ipp && !r.total ? 'Needs both her crown and her soles in this picture.' : 'Not enough points yet.');
+    }
+    if (S.height && r.scaleFrom !== 'ref' && r.why.length) html += msg('Why the reference isn’t used: ' + r.why.join(' '), 'warn');
+    return html;
+  }
+
+  function bestHeight(fr, sr) {
+    if (fr.heightIn && fr.scaleFrom === 'ref') return fr.heightIn;
+    if (sr.heightIn && sr.scaleFrom === 'ref') return sr.heightIn;
+    return fr.heightIn || sr.heightIn || null;
+  }
+
+  function bodyBlock(fr, sr, z) {
+    if (!S.sizes || !z.from) return '';
+    var H = bestHeight(fr, sr), waist = z.val('waist'), hips = z.val('hips'), bust = z.val('bust');
+    var shW = fr.sh && z.fi ? fr.sh * z.fi : null, hiW = fr.hi && z.fi ? fr.hi * z.fi : null;
+    var bt = bodyType({ heightIn: H, waist: waist, hips: hips, bust: bust, shW: shW, hiW: hiW,
+      armW: fr.ua && z.fi ? fr.ua * z.fi : null, thighW: fr.th && z.fi ? fr.th * z.fi : null, muscular: S.muscular });
+    if (!bt) return '';
+    var shape = bodyShape(bust, waist, hips, shW, hiW), html = '<h2>Body</h2>';
+    var rough = z.from !== 'ref' || !(z.items.waist && z.items.waist.exact);
+    html += card('Body Type', esc(bt.name), rough ? 'rough' : '', 'Level: ' + bt.levelName + ' (' + bt.why + ').' + (bt.name !== bt.levelName ? ' Picked ' + bt.name + ' from her shape and proportions.' : '') +
+      (rough ? ' Rough: ' + (z.from !== 'ref' ? 'no reference object' : 'front picture only') + '.' : ''));
+    if (shape) html += card('Body shape', esc(shape), rough ? 'rough' : '', 'From bust, waist and hips' + (bust ? '' : ' (no bust measured)') + '.');
+    if (waist && hips) html += card('Waist-to-Hip', '', rough ? 'rough' : '', esc(waistPhrase(bt.level, waist / hips, shW, hiW)));
+    return html;
+  }
+
+  function sizesBlock(fr, sr, z) {
+    if (!S.sizes) return '';
+    var html = '<h2>Sizes</h2>';
+    if (!z.from) return html + msg('Sizes need a ruler: a reference object, or her head.', 'info');
+    var rows = [], anyRange = false;
+    ['bust', 'under', 'waist', 'hips'].forEach(function (k) {
+      var it = z.items[k]; if (!it || !(it.exact || it.lo)) return;
+      if (!it.exact) anyRange = true;
+      rows.push([SIZE_NAMES[k] + (it.exact ? '' : ' (front only)'), sizeText(it)]);
+    });
+    var note = rows.length ? table(rows) : '';
+    if (anyRange) note += msg('Ranges come from the front picture alone, which can’t see how deep her body is. Add a side picture for single numbers.', 'info');
+    if (z.from !== 'ref') note = msg('Rough: no reference object, so the ruler is ' + (z.from === 'keisha' ? 'Keisha’s spec head size' : 'a guess from her head') + '.', 'warn') + note;
+    html += card('Bust, waist, hips', '', z.from !== 'ref' || anyRange ? 'rough' : '', note);
+    // Bra
+    if (z.cup) {
+      var cn = [];
+      if (z.cup.m1 != null) cn.push('Tape method (bust minus underbust): ' + z.cup.m1.toFixed(1) + ' in = ' + cupFor(z.cup.m1) + (z.cup.m1Exact ? '' : ' (front only, rough)') + '.');
+      if (z.cup.m2 != null) cn.push('Breast width method (' + z.cup.baseIn.toFixed(1) + ' in wide): ' + cupFor(z.cup.m2) + '.');
+      if (z.cup.disagree) cn.push('<span class="note-y">The two methods disagree by more than 2 cups. Check the bust, underbust and breast edge points.</span>');
+      cn.push('Band = underbust rounded up to an even number. US cup order. Brands vary.');
+      html += card('Bra size', 'about ' + z.cup.band + z.cup.cup, z.cup.m1Exact ? '' : 'rough', cn.join(' '));
+    } else html += msg('Bra size needs bust and underbust (Sizes), or the breast edges (Breast detail).', 'info');
+    // Clothing
+    var cl = z.clothes;
+    if (cl && (cl.misses || cl.plus)) {
+      var crow = [];
+      if (cl.misses) crow.push(['Regular', cl.misses.beyond ? 'bigger than size 22' : 'size ' + cl.misses.row[0] + ' (' + cl.misses.row[1] + ')']);
+      if (cl.plus) crow.push(['Plus', cl.plus.beyond ? 'bigger than 5X (34W)' : cl.plus.row[0] + ' (' + cl.plus.row[1] + ')']);
+      html += card('Clothing size', '', anyRange || z.from !== 'ref' ? 'rough' : '', table(crow) + msg('Uses the biggest of bust, waist and hips. Charts: Nike (regular), Kohl’s (plus). Brands vary.', 'info'));
+    }
+    // Shoe
+    var H = bestHeight(fr, sr);
+    if (z.shoe) html += card('Shoe size', 'women’s US ' + z.shoe.size, z.from === 'ref' ? '' : 'rough', 'Foot ' + z.shoe.foot.toFixed(1) + ' in, from the side picture. A third of an inch off moves it a full size.');
+    else if (H) { var fl = 0.15 * H; html += card('Shoe size', 'about women’s US ' + shoeFor(fl), 'rough', 'Estimate: no side picture with heel and toe, so this assumes her foot is about 15% of her height (' + fl.toFixed(1) + ' in).'); }
+    return html;
+  }
+
+  function breastBlock(fr, sr, z) {
+    if (!S.breast) return '';
+    var html = '<h2>Breasts</h2>', fi = z.fi, si = z.si, rows = [];
+    if (cur === 'front' || fr.brBase) {
+      if (fr.brBase) rows.push(['Base width (each)', fi ? inch(fr.brBase * fi) : '—']);
+      if (fr.brLen && fr.head) rows.push(['Length, top to lowest point', (fr.brLen / fr.head).toFixed(2) + ' heads' + (fi ? ' (' + inch(fr.brLen * fi) + ')' : '')]);
+      if (rows.length) html += card('Size', '', '', table(rows));
+      var words = [];
+      if (fr.brLen && fr.head) words.push(['Breast Length', breastLengthWord(fr.brLen / fr.head)]);
+      if (fr.nipPos != null) words.push(['Breast Position', TERMS.breast_position[fr.nipPos < 0.40 ? 0 : fr.nipPos <= 0.55 ? 1 : 2]]);
+      if (fr.brGap != null && fr.brBase) {
+        var gr = fr.brGap / fr.brBase;
+        words.push(['Spacing', TERMS.breast_position[fr.brGap === 0 || gr < 0.02 ? 6 : gr < 0.08 ? 3 : gr <= 0.3 ? 4 : 5]]);
+      }
+      if (fr.nipUneven != null) words.push(['Level', TERMS.breast_position[fr.nipUneven > 0.1 ? 8 : 7]]);
+      if (fr.nipFold != null) {
+        var at = TERMS.nipple_placement.filter(function (t) { return /^At the fold/.test(t); })[0], below = TERMS.nipple_placement.filter(function (t) { return /^Below the fold/.test(t); })[0];
+        if (fr.nipFold > 0.05 && below) words.push(['Nipple', below]); else if (Math.abs(fr.nipFold) <= 0.05 && at) words.push(['Nipple', at]);
+      }
+      if (sr.brProj != null && sr.head) {
+        var ratio = fr.brBase && fi && si ? (fr.brBase * fi) / (sr.brProj * si) : null;
+        words.push(['Breast Projection', breastProjWord(sr.brProj / sr.head, ratio)]);
+      }
+      if (words.length) html += card('Modelsheet words', '', '', words.map(function (x) { return '<div>' + x[0] + ': ' + term(x[1]) + '</div>'; }).join(''));
+    }
+    if (z.qiao) html += card('Volume (surgeons’ formula)', z.qiao.map(function (q) { return Math.round(q) + ' cc'; }).join(' / '), 'rough',
+      'Per breast, from nipple-to-edge and nipple-to-fold (front) and projection (side). Photos give straight lines where surgeons measure over the curve, so this runs a little small.');
+    else html += msg('Volume needs the nipple, edges and fold (front) plus the breast front and underbust (side).', 'info');
+    return html;
+  }
+
+  function sideBlock(r) {
+    if (cur !== 'side') return '';
+    var h = '', ip = r.ipp;
+    function it(x) { return ip ? ' (' + inch(Math.abs(x * r.head) * ip) + ')' : ''; }
+    if (r.brPastBe != null) h += gcard('Breasts past belly', sgn(r.brPastBe) + ' heads' + it(r.brPastBe), r.brPastBe, BANDS.brPastBe,
+      'Target 0.1–0.5 heads. ' + (r.brPastBe < 0 ? 'Belly sticks out farther than the breasts.' : r.brPastBe > 0.5 ? 'Breasts stick out too far past the belly.' : ''), '+ means the breasts stick out farther than the belly.');
+    if (r.bellyHang != null) h += gcard('Belly hang', sgn(r.bellyHang) + ' heads' + it(r.bellyHang), r.bellyHang, BANDS.bellyHang, 'Lowest point of the belly below the navel. Target 0.3–0.8 heads.', 'Lowest point of the belly below the navel.');
+    if (r.buPast != null) {
+      h += gcard('Butt past upper back', sgn(r.buPast) + ' heads' + it(r.buPast), r.buPast, BANDS.buPast, 'Target 0.6 heads or more.', '+ means the butt sticks out past the upper back.');
+      h += card('Ass Projection', '', '', term(assProjWord(r.buPast, r.buHeight)));
+    }
+    if (r.brLowVsNavel != null) h += gcard('Breasts’ low point', sgn(r.brLowVsNavel) + ' heads', r.brLowVsNavel, BANDS.brLowVsNavel, 'Vs. navel (+ means below). Target: within 0.3 heads.', 'Vs. navel (+ means below).');
+    return h;
+  }
+
+  function extrasBlock(r) {
+    if (!S.extras || cur !== 'front') return '';
+    var h = '', ip = r.ipp, shoes = v().shoes || 0;
+    if (r.navelDown != null) h += gcard('Navel height', r.navelDown.toFixed(2) + ' heads' + (ip && r.total ? ' (' + inch((r.total - r.navelDown * r.head) * ip - shoes) + ' off the floor)' : ''), r.navelDown, BANDS.navelDown, 'Heads down from the crown. Target about 3.', 'Heads down from the crown. Most adults: about 3.');
+    if (r.kneeUp != null) h += gcard('Knee height', r.kneeUp.toFixed(2) + ' heads' + (ip ? ' (' + inch(r.kneeUp * r.head * ip - shoes) + ')' : ''), r.kneeUp, BANDS.kneeUp, 'Heads up from the floor. Target about 2.', 'Heads up from the floor. Most adults: about 2.');
+    if (r.wristVsCrotch != null) h += gcard('Arm length', sgn(r.wristVsCrotch) + ' heads', r.wristVsCrotch, BANDS.wristVsCrotch,
+      'Wrist vs. crotch level (+ means below). Target: about level. Only for an arm hanging straight down.', 'Wrist vs. crotch level (+ means below). Most adults: about level, arm hanging straight.');
+    if (r.handFace != null) h += gcard('Hand ÷ face', r.handFace.toFixed(2), r.handFace, BANDS.handFace, 'Target about 1.0. ' + (r.handFace < 0.9 ? 'Hands read small (or tilted).' : r.handFace > 1.1 ? 'Hands read big.' : ''), 'Most adults: about 1.0.');
+    if (r.neckHead != null) h += gcard('Neck ÷ head width', r.neckHead.toFixed(2), r.neckHead, BANDS.neckHead, 'Target 0.75–1.0 for her build.', 'Neck width vs. skull width.');
+    if (r.headSh != null) h += gcard('Head ÷ shoulders', r.headSh.toFixed(2), r.headSh, BANDS.headSh, 'Target 0.28–0.38. ' + (r.headSh > 0.38 ? 'Head reads big for her frame.' : r.headSh < 0.28 ? 'Head reads small for her frame.' : ''), 'Skull width vs. shoulder width.');
+    return h ? '<h2>Extra checks</h2>' + h : '';
+  }
+
+  function limbsBlock(fr, sr, z, bt) {
+    if (!S.limbs) return '';
+    var fi = z.fi, H = bestHeight(fr, sr), rows = [], html = '<h2>Arms and legs</h2>';
+    function L(px) { return fi ? inch(px * fi) : (fr.head ? (px / fr.head).toFixed(2) + ' heads' : '—'); }
+    if (fr.upperArm) rows.push(['Upper arm length', L(fr.upperArm)]);
+    if (fr.forearm) rows.push(['Forearm length', L(fr.forearm)]);
+    if (fr.hand) rows.push(['Hand length', L(fr.hand)]);
+    if (fr.thighLen) rows.push(['Thigh length (crotch to knee)', L(fr.thighLen)]);
+    if (fr.calfLen) rows.push(['Calf length (knee to ankle)', L(fr.calfLen)]);
+    [['arm', 'ua', 'Upper arm'], ['fa', 'fa', 'Forearm'], ['thigh', 'th', 'Thigh'], ['calf', 'ca', 'Calf']].forEach(function (k) {
+      var it = z.items[k[0]];
+      if (it && it.exact) rows.push([k[2] + ' around', inch(it.exact)]);
+      else if (fr[k[1]] && fi) rows.push([k[2] + ' width', inch(fr[k[1]] * fi)]);
+    });
+    if (rows.length) html += card('Lengths and thickness', '', z.from === 'ref' ? '' : 'rough', table(rows));
+    if (H && fi) {
+      var g = bt ? groupFor(bt.level) : 'mid', words = [];
+      var armLenClass = fr.armLen ? lenClassFor(fr.armLen * fi / H, 0.32, 0.36) : null;
+      var thighLenClass = fr.thighLen ? lenClassFor(fr.thighLen * fi / H, 0.175, 0.205) : null;
+      var legLenClass = fr.crotch != null ? lenClassFor(fr.crotch, 0.44, 0.48) : null;
+      if (fr.ua) words.push(['Arms', phraseFor(TERMS['arms_' + g], armLenClass, fullRankFor(fr.ua * fi / H, ARM_CUTS))]);
+      if (fr.th) {
+        var tr = fullRankFor(fr.th * fi / H, THIGH_CUTS);
+        words.push(['Thigh Thickness', phraseFor(TERMS['thigh_thickness_' + g], thighLenClass, tr)]);
+        words.push(['Legs', phraseFor(TERMS['legs_' + g], legLenClass, tr)]);
+      }
+      if (words.length) html += card('Modelsheet words (closest match)', '', 'rough', words.map(function (x) { return '<div>' + x[0] + ': ' + term(x[1]) + '</div>'; }).join('') +
+        msg('Picked by length and thickness only. Details a picture can’t measure (veins, cellulite, stretch marks) are your call.', 'info'));
     }
     return html;
   }
 
+  function faceBlock(fr) {
+    if (!S.face || cur !== 'front') return '';
+    var h = '';
+    if (fr.noseEye != null) h += card('Nose ÷ eye gap', fr.noseEye.toFixed(2), '', 'Nose width vs. the gap between the inner eye corners. Classic rule: about 1.0. ' + (fr.noseEye > 1.15 ? 'Nose reads wide for the face.' : fr.noseEye < 0.85 ? 'Nose reads narrow for the face.' : ''));
+    if (fr.fingerHand != null) h += card('Finger ÷ hand', fr.fingerHand.toFixed(2), '', 'Middle finger length vs. wrist-to-fingertip length.');
+    return h ? '<h2>Face and hands</h2>' + h : '';
+  }
+
+  function curvesBlock(z) {
+    if (!S.curves) return '';
+    var html = '<h2>Curves and volume</h2>', any = false;
+    ['br', 'be', 'bu', 'th'].forEach(function (pair) {
+      var f = CURVES.filter(function (c) { return c.pair === pair && c.view === 'front'; })[0], s = CURVES.filter(function (c) { return c.pair === pair && c.view === 'side'; })[0];
+      var fp = V.front.curves[f.id], sp = V.side.curves[s.id];
+      if (!(fp && fp.length) && !(sp && sp.length)) return;
+      any = true;
+      var res = sliceVolume(fp, f.loop, sp, s.loop, z.fi, z.si);
+      if (res) {
+        var note = 'Height ' + inch(res.height) + '. ' + (res.maxCirc ? 'Thickest around: ' + inch(res.maxCirc) + '. ' : '') +
+          (res.profile ? 'Along the side curve: ' + inch(res.profile) + '. ' : '') + 'Front and side heights: ' + res.hF.toFixed(1) + ' / ' + res.hS.toFixed(1) + ' in' +
+          (Math.abs(res.hF - res.hS) > 0.15 * res.height ? ' <span class="note-y">(they differ a lot: trace the same top and bottom in both pictures)</span>' : '') + '.';
+        html += card(PAIR_NAMES[pair] + ' volume', Math.round(res.cc) + ' cc', z.from === 'ref' ? '' : 'rough', note);
+      } else html += msg(PAIR_NAMES[pair] + ': needs both the front trace (' + f.label + ') and the side trace (' + s.label + '), 3+ points each, plus a ruler.', 'info');
+    });
+    return any ? html : html + msg('Trace a curve in the Curves card to get a volume.', 'info');
+  }
+
   function inchesTable(r) {
     if (!r.ipp) return '';
-    var rows = [], f = function (px) { return (px * r.ipp).toFixed(1) + ' in'; };
+    var rows = [], f = function (px) { return inch(px * r.ipp); };
     if (r.head) rows.push(['Head, crown to chin', f(r.head)]);
     if (r.hd) rows.push(['Head width', f(r.hd)]);
     if (r.nk) rows.push(['Neck width', f(r.nk)]);
     if (r.sh) rows.push(['Shoulders, across', f(r.sh)]);
     if (r.bu) rows.push(['Bust, across', f(r.bu)]);
+    if (r.ub) rows.push(['Underbust, across', f(r.ub)]);
     if (r.wa) rows.push(['Waist, across', f(r.wa)]);
     if (r.hi) rows.push(['Hips, across', f(r.hi)]);
-    if (r.crotch != null && r.total) rows.push(['Crotch height off the floor', (r.crotch * r.total * r.ipp - (v().shoes || 0)).toFixed(1) + ' in']);
+    if (r.crotch != null && r.total) rows.push(['Crotch height off the floor', inch(r.crotch * r.total * r.ipp - (v().shoes || 0))]);
     if (r.dBust) rows.push(['Bust depth, front to back', f(r.dBust)]);
     if (r.dUnder) rows.push(['Underbust depth', f(r.dUnder)]);
     if (r.dWaist) rows.push(['Belly depth, front to back', f(r.dWaist)]);
     if (r.dHip) rows.push(['Hip depth, front to back', f(r.dHip)]);
+    if (r.brProj) rows.push(['Breast projection', f(r.brProj)]);
     if (r.foot) rows.push(['Foot length', f(r.foot)]);
     if (!rows.length) return '';
-    return card('In inches', '', r.scaleFrom === 'head' ? 'rough' : '',
-      (r.scaleFrom === 'head' ? 'Rough: based on the head guess. ' : '') +
-      (r.carried ? 'Ruler carried over from the other picture through her head length. ' : '') +
-      '<table class="kv">' + rows.map(function (x) { return '<tr><td>' + x[0] + '</td><td>' + x[1] + '</td></tr>'; }).join('') + '</table>');
+    var src = r.scaleFrom === 'ref' ? '' : r.carried ? 'Ruler carried over from the other picture through her head length. ' :
+      r.scaleFrom === 'keisha' || r.scaleFrom === 'keishaLegs' ? 'Ruler: Keisha’s spec. ' : 'Rough: ruler is a guess from her head. ';
+    return card('In inches', '', r.scaleFrom === 'ref' ? '' : 'rough', (src ? msg(src, 'info') : '') + table(rows));
   }
 
-  function sizesBlock() {
-    if (!S.sizes) return '';
-    var fr = results('front'), sr = results('side'), z = sizes(fr, sr), html = '<h2>Sizes</h2>';
-    if (!z.from) return html + msg('Sizes need a ruler: a reference object in the front or side picture (or the head guess). Her head carries the ruler from one picture to the other.', 'info');
-    var rows = [], anyRange = false;
-    ['bust', 'under', 'waist', 'hips'].forEach(function (k) {
-      var it = z.items[k]; if (!it || !(it.exact || it.lo)) return;
-      if (!it.exact) anyRange = true;
-      rows.push('<tr><td>' + SIZE_NAMES[k] + (it.exact ? '' : ' (front only)') + '</td><td>' + sizeText(it) + '</td></tr>');
-    });
-    var note = '';
-    if (rows.length) note += '<table class="kv">' + rows.join('') + '</table>';
-    if (anyRange) note += '<p class="msg info">Ranges come from the front picture alone, which can’t see how deep her body is. Add a side picture of the same character for single numbers.</p>';
-    if (z.cup) note += '<p class="msg info">Bra: about <b>' + z.cup.band + z.cup.cup + '</b> (bust minus underbust ' + z.cup.diff.toFixed(1) + ' in). Shaky: 2 inches off on either number moves it 2 cups. US sizing; brands vary.</p>';
-    else if (S.sizes) note += '<p class="msg info">Cup size needs bust and underbust in both the front and side pictures.</p>';
-    if (z.shoe) note += '<p class="msg info">Shoe: about women’s US <b>' + z.shoe.size + '</b> (foot ' + z.shoe.foot.toFixed(1) + ' in). A third of an inch off moves it a full size.</p>';
-    else note += '<p class="msg info">Shoe size needs the heel and longest toe in a side picture.</p>';
-    if (z.from === 'head') note = '<p class="msg warn">Rough: based on the head guess, not a reference object.</p>' + note;
-    return html + card('Bust, waist, hips', '', z.from === 'head' || anyRange ? 'rough' : '', note);
-  }
-
-  function extrasBlock(r) {
-    if (!S.extras) return '';
-    var h = '', ip = r.ipp;
-    if (r.navelDown != null) h += gcard('Navel height', r.navelDown.toFixed(2) + ' heads', r.navelDown, BANDS.navelDown, 'Heads down from the crown. Target about 3.', 'Heads down from the crown. Most adults: about 3.');
-    if (r.kneeUp != null) h += gcard('Knee height', r.kneeUp.toFixed(2) + ' heads', r.kneeUp, BANDS.kneeUp, 'Heads up from the floor. Target about 2.', 'Heads up from the floor. Most adults: about 2.');
-    if (r.wristVsCrotch != null) h += gcard('Arm length', sgn(r.wristVsCrotch) + ' heads', r.wristVsCrotch, BANDS.wristVsCrotch,
-      'Wrist vs. crotch level (+ means below). Target: about level. ' + (r.wristVsCrotch > 0.25 ? 'Arms read long.' : r.wristVsCrotch < -0.25 ? 'Arms read short.' : ''),
-      'Wrist vs. crotch level (+ means below). Most adults: about level.');
-    if (r.handFace != null) h += gcard('Hand ÷ face', r.handFace.toFixed(2), r.handFace, BANDS.handFace,
-      'Wrist to fingertip vs. hairline to chin. Target about 1.0. ' + (r.handFace < 0.9 ? 'Hands read small.' : r.handFace > 1.1 ? 'Hands read big.' : ''), 'Most adults: about 1.0.');
-    if (r.neckHead != null) h += gcard('Neck ÷ head width', r.neckHead.toFixed(2), r.neckHead, BANDS.neckHead,
-      'Target 0.75–1.0 for her build. ' + (r.neckHead < 0.75 ? 'Neck reads too thin for her.' : ''), 'Neck width vs. skull width.');
-    if (r.headSh != null) h += gcard('Head ÷ shoulders', r.headSh.toFixed(2), r.headSh, BANDS.headSh,
-      'Target 0.28–0.38. ' + (r.headSh < 0.28 ? 'Head reads small for her frame.' : r.headSh > 0.38 ? 'Head reads big for her frame.' : ''), 'Skull width vs. shoulder width.');
-    if (r.footHeads != null) h += gcard('Foot length', r.footHeads.toFixed(2) + ' heads' + inchTxt(r.foot, ip), r.footHeads, BANDS.footHeads, 'Target about 1.2 heads.', 'Most adults: about 1.2 heads.');
-    return h ? '<h2>Extra checks</h2>' + h : '';
+  function legendLines(r) {
+    var Lns = [];
+    if (r.heightIn) Lns.push('Height (' + r.quality + '): ' + fmtFtIn(r.heightIn) + ' ± ' + roundHalf(r.heightErr) + ' in');
+    if (r.heads) Lns.push('Head count: ' + r.heads.toFixed(2));
+    if (r.crotch != null) Lns.push('Crotch: ' + (r.crotch * 100).toFixed(1) + '% of height');
+    if (r.hipSh) Lns.push('Hips ÷ shoulders: ' + r.hipSh.toFixed(2));
+    if (r.waHi) Lns.push('Waist ÷ hips: ' + r.waHi.toFixed(2));
+    if (r.brPastBe != null) Lns.push('Breasts past belly: ' + sgn(r.brPastBe) + ' heads');
+    if (r.buPast != null) Lns.push('Butt past upper back: ' + sgn(r.buPast) + ' heads');
+    if (S.sizes) {
+      var z = sizes(results('front'), results('side'));
+      ['bust', 'waist', 'hips'].forEach(function (k) { var it = z.items[k]; if (it && (it.exact || it.lo)) Lns.push(SIZE_NAMES[k] + ': ' + sizeText(it)); });
+      if (z.cup) Lns.push('Bra: about ' + z.cup.band + z.cup.cup);
+    }
+    return Lns;
   }
 
   function updatePanel() {
-    var w = v(), n = nextStep();
-    $('next').innerHTML = !w.img ? 'Open the ' + cur + ' picture to start.' :
-      n ? 'Click: <b>' + esc(stepText(n).label) + '</b><small>' + esc(stepText(n).hint || '') + '</small><div class="nextbtns"><button class="btn small" id="skip">Skip this point</button></div>' :
-      '<b>All points placed.</b><small>Drag any point to fine-tune it.</small>';
-    if ($('skip')) $('skip').onclick = skipPoint;
+    var w = v(), n = nextStep(), html;
+    if (!w.img) html = 'Open the ' + cur + ' picture to start.';
+    else if (tracing) {
+      var cd = CURVES.filter(function (c) { return c.id === tracing; })[0];
+      html = 'Tracing: <b>' + esc(cd.label) + '</b><small>' + esc(cd.hint) + ' Points so far: ' + (w.curves[tracing] || []).length + '.</small>' +
+        '<div class="nextbtns"><button class="btn small btn-gold" id="traceDone">Done</button></div>';
+    } else if (n) html = (armed ? 'Redo: ' : 'Click: ') + '<b>' + esc(stepText(n).label) + '</b><small>' + esc(stepText(n).hint || '') + '</small>' +
+      '<div class="nextbtns"><button class="btn small" id="skip">' + (armed ? 'Cancel' : 'Skip this point') + '</button></div>';
+    else html = '<b>All points placed.</b><small>Drag any point to fine-tune it, or tap a point in the list to redo it.</small>';
+    if (w.img && selected) html += '<div class="nudge"><span class="hint">Nudge ' + esc(selName()) + ':</span>' +
+      '<button class="btn small" data-n="0,-1" aria-label="Up">↑</button><button class="btn small" data-n="0,1" aria-label="Down">↓</button>' +
+      '<button class="btn small" data-n="-1,0" aria-label="Left">←</button><button class="btn small" data-n="1,0" aria-label="Right">→</button></div>';
+    $('next').innerHTML = html;
+    if ($('skip')) $('skip').onclick = function () { if (armed) { armed = null; draw(); } else skipPoint(); };
+    if ($('traceDone')) $('traceDone').onclick = function () { tracing = null; draw(); };
+    Array.prototype.forEach.call($('next').querySelectorAll('[data-n]'), function (b) {
+      b.onclick = function () { var d = b.getAttribute('data-n').split(','); nudge(+d[0], +d[1]); };
+    });
     $('steps').innerHTML = STEPS.filter(function (st) { return enabled(st); }).map(function (st) {
       var cls = w.points[st.key] ? 'done' : w.skipped[st.key] ? 'skip' : (n && n.key === st.key ? 'current' : '');
-      return '<li class="' + cls + '">' + esc(stepText(st).label) + '</li>';
+      if (armed === st.key) cls = 'current';
+      return '<li class="' + cls + '" data-k="' + st.key + '">' + esc(stepText(st).label) + '</li>';
     }).join('');
-    $('undo').disabled = w.placed.length === 0;
-    $('reset').disabled = w.placed.length === 0;
-    $('save').disabled = !w.img;
+    Array.prototype.forEach.call($('steps').querySelectorAll('li'), function (li) {
+      li.onclick = function () { if (!v().img) return; tracing = null; armed = li.getAttribute('data-k'); selected = v().points[armed] ? { type: 'pt', key: armed } : selected; draw(); };
+    });
+    $('undo').disabled = !(w.placed.length || (tracing && (w.curves[tracing] || []).length));
+    $('reset').disabled = !w.placed.length; $('save').disabled = !w.img; $('removePic').disabled = !w.img; $('fitBtn').disabled = !w.img;
+    curvesPanel();
 
-    var r = results(cur), html = '';
-    if (!r.ipp) {   // ruler carried over from the other picture through her head length
-      var br = bridge(results('front'), results('side')), ci = cur === 'front' ? br.fi : br.si;
-      if (ci) { r.ipp = ci; r.scaleFrom = br.from; r.carried = true; }
-    }
-    r.warnings.forEach(function (x) { html += msg(x, 'bad'); });
-    r.notes.forEach(function (x) { html += msg(x, 'warn'); });
-    html += '<h2>Results' + (cur === 'side' ? ' (side)' : '') + '</h2>';
-    html += heightCard(r, cur);
-    if (r.heads) html += gcard('Head count', r.heads.toFixed(2), r.heads, BANDS.heads,
-      'Target 8–8.5 heads. ' + (r.heads < 8 ? 'Head reads too big or body too short.' : r.heads > 8.5 ? 'Head reads too small or body too long.' : 'On target.'),
-      'Body height in head lengths. Most adults land around 7–8.');
+    var fr = results('front'), sr = results('side'), r = cur === 'side' ? sr : fr, z = sizes(fr, sr);
+    if (!r.ipp) { var ci = cur === 'front' ? z.fi : z.si; if (ci) { r.ipp = ci; r.scaleFrom = z.from === 'ref' ? 'ref' : 'guess'; r.carried = true; } }
+    var out = '';
+    r.warnings.forEach(function (x) { out += msg(x, 'bad'); });
+    r.notes.forEach(function (x) { out += msg(x, 'warn'); });
+    out += '<h2>Results' + (cur === 'side' ? ' (side)' : '') + '</h2>';
+    out += heightCard(cur === 'side' ? sr : fr, cur, cur === 'side' ? fr : sr);
+    if (S.turn && cur === 'front') out += r.turnDeg != null ? card('Turn angle', 'about ' + Math.round(r.turnDeg) + '°', 'rough', 'From where the nose tip sits on her face (±10°). ' + (r.turnFixed ? 'Widths and sizes are corrected for the turn.' : 'Too small to need a correction.')) : '';
+    if (r.heads) out += gcard('Head count', r.heads.toFixed(2), r.heads, BANDS.heads,
+      'Target 8–8.5 heads. ' + (r.heads < 8 ? 'Head reads too big or body too short.' : r.heads > 8.5 ? 'Head reads too small or body too long.' : 'On target.'), 'Body height in head lengths. Most adults land around 7–8.');
     if (r.crotch != null) {
       var msgC = r.crotch > 0.5 ? 'Crotch is above halfway: legs too long. Reject.' : r.crotch > 0.49 ? 'Legs a little long.' : r.crotch < 0.45 ? 'Legs a little short, torso long.' : 'Torso slightly longer than legs, as specced.';
       var down = r.crotchHeadsDown ? ' Sits ' + r.crotchHeadsDown.toFixed(1) + ' heads down from the crown.' : '';
-      html += gcard('Crotch height', (r.crotch * 100).toFixed(1) + '%', r.crotch, BANDS.crotch,
-        'Target 47% of her height, measured up from the floor. ' + msgC + down + ' At 6′10″–7′0″ that is about ' + (r.crotch * 82).toFixed(1) + '–' + (r.crotch * 84).toFixed(1) + ' in off the floor.',
+      out += gcard('Crotch height', (r.crotch * 100).toFixed(1) + '%', r.crotch, BANDS.crotch, 'Target 47% of her height, measured up from the floor. ' + msgC + down,
         'Share of her height, measured up from the floor. Most adults land around 45–48%.' + down);
     }
-    if (r.hipSh) html += gcard('Hips ÷ shoulders', r.hipSh.toFixed(2), r.hipSh, BANDS.hipSh,
-      'Target about 1.5 (front view). ' + (r.hipSh < 1.35 ? 'Hips too narrow for her shoulders.' : r.hipSh > 1.65 ? 'Hips too wide for her shoulders.' : 'On target.'), 'Front view.');
-    if (r.waHi) html += gcard('Waist ÷ hips', r.waHi.toFixed(2), r.waHi, BANDS.waHi,
-      'Target 0.62. ' + (r.waHi < 0.57 ? 'Waist too narrow: too hourglass for her.' : r.waHi > 0.67 ? 'Waist too wide: not enough curve.' : 'On target.'), 'Front view.');
-    if (cur === 'side') {
-      var ip = r.ipp;
-      if (r.brPastBe != null) html += gcard('Breasts past belly', sgn(r.brPastBe) + ' heads' + inchTxt(Math.abs(r.brPastBe * r.head), ip), r.brPastBe, BANDS.brPastBe,
-        'Target 0.1–0.5 heads. ' + (r.brPastBe < 0 ? 'Belly sticks out farther than the breasts.' : r.brPastBe > 0.5 ? 'Breasts stick out too far past the belly.' : ''),
-        '+ means the breasts stick out farther than the belly.');
-      if (r.bellyHang != null) html += gcard('Belly hang', sgn(r.bellyHang) + ' heads' + inchTxt(Math.abs(r.bellyHang * r.head), ip), r.bellyHang, BANDS.bellyHang,
-        'Lowest point of the belly below the navel. Target 0.3–0.8 heads (some hang).', 'Lowest point of the belly below the navel.');
-      if (r.buPast != null) html += gcard('Butt past upper back', sgn(r.buPast) + ' heads' + inchTxt(Math.abs(r.buPast * r.head), ip), r.buPast, BANDS.buPast,
-        'Target 0.6 heads or more (sticks way out).', '+ means the butt sticks out past the upper back.');
-      if (r.brLowVsNavel != null) html += gcard('Breasts’ low point', sgn(r.brLowVsNavel) + ' heads', r.brLowVsNavel, BANDS.brLowVsNavel,
-        'Vs. navel (+ means below). Target: within 0.3 heads of the navel.', 'Vs. navel (+ means below).');
+    if (r.hipSh) out += gcard('Hips ÷ shoulders', r.hipSh.toFixed(2), r.hipSh, BANDS.hipSh,
+      'Target about 1.5. ' + (r.hipSh < 1.35 ? 'Hips too narrow for her shoulders.' : r.hipSh > 1.65 ? 'Hips too wide for her shoulders.' : 'On target.'),
+      r.hipSh > 1.05 ? 'Hips wider than shoulders: bigger on the bottom than the top. She’d buy a bigger size in pants than in tops.' : r.hipSh < 0.95 ? 'Shoulders wider than hips: bigger on top.' : 'Hips and shoulders about the same width: a straight frame.');
+    if (r.waHi) out += gcard('Waist ÷ hips', r.waHi.toFixed(2), r.waHi, BANDS.waHi,
+      'Target 0.62. ' + (r.waHi < 0.57 ? 'Waist too narrow: too hourglass for her.' : r.waHi > 0.67 ? 'Waist too wide: not enough curve.' : 'On target.'),
+      r.waHi <= 0.75 ? 'A clearly pinched-in waist.' : r.waHi >= 0.85 ? 'Waist almost as wide as the hips: very little curve in at the waist.' : 'Some curve in at the waist.');
+    out += sideBlock(r);
+    var bt = null;
+    if (S.sizes && z.from) {
+      var H = bestHeight(fr, sr);
+      bt = bodyType({ heightIn: H, waist: z.val('waist'), hips: z.val('hips'), bust: z.val('bust'), shW: fr.sh && z.fi ? fr.sh * z.fi : null, hiW: fr.hi && z.fi ? fr.hi * z.fi : null,
+        armW: fr.ua && z.fi ? fr.ua * z.fi : null, thighW: fr.th && z.fi ? fr.th * z.fi : null, muscular: S.muscular });
     }
-    html += inchesTable(r);
-    html += sizesBlock();
-    html += extrasBlock(r);
-    if (!w.img) html = '';
-    else if (html === '<h2>Results' + (cur === 'side' ? ' (side)' : '') + '</h2>') html += msg('Results appear once the crown, chin and soles are placed.', 'info');
-    $('results').innerHTML = html;
-    $('saveReading').disabled = !(r.heads || r.heightIn);
+    out += bodyBlock(fr, sr, z);
+    out += sizesBlock(fr, sr, z);
+    out += breastBlock(fr, sr, z);
+    out += inchesTable(r);
+    out += extrasBlock(r);
+    out += limbsBlock(fr, sr, z, bt);
+    out += faceBlock(fr);
+    out += curvesBlock(z);
+    $('results').innerHTML = w.img ? out : '';
     $('kHint').textContent = S.keisha ? 'Grading against her targets' : 'Just measuring: no colors';
     $('kTargets').hidden = !S.keisha;
   }
 
-  /* ---- readings ---- */
-  var READ_KEYS = [['height', 'Height', function (x) { return fmtFtIn(x) + ' (' + x.toFixed(1) + ' in)'; }], ['heads', 'Head count', function (x) { return x.toFixed(2); }],
-    ['crotch', 'Crotch', function (x) { return (x * 100).toFixed(1) + '%'; }], ['hipSh', 'Hips ÷ shoulders', function (x) { return x.toFixed(2); }],
-    ['waHi', 'Waist ÷ hips', function (x) { return x.toFixed(2); }], ['bust', 'Bust', function (x) { return x.toFixed(1) + ' in'; }],
-    ['waist', 'Waist', function (x) { return x.toFixed(1) + ' in'; }], ['hips', 'Hips (butt)', function (x) { return x.toFixed(1) + ' in'; }],
-    ['shoe', 'Shoe (US women’s)', function (x) { return (Math.round(x * 2) / 2).toString(); }]];
-  function showReadings() {
-    var list = load('pc-readings', []);
-    if (!list.length) { $('readings').innerHTML = 'None yet. Save a reading from each picture of the same character to average them.'; return; }
-    var rows = READ_KEYS.map(function (k) {
-      var vals = list.map(function (x) { return x[k[0]]; }).filter(function (x) { return typeof x === 'number'; });
-      if (!vals.length) return '';
-      vals.sort(function (a, b) { return a - b; });
-      var avg = vals.reduce(function (s, x) { return s + x; }, 0) / vals.length;
-      return '<tr><td>' + k[1] + ' (' + vals.length + ')</td><td>' + k[2](avg) + (vals.length > 1 ? ' <span class="hint">range ' + k[2](vals[0]) + '–' + k[2](vals[vals.length - 1]) + '</span>' : '') + '</td></tr>';
+  function curvesPanel() {
+    var box = $('curvesBox');
+    if (!S.curves) { box.hidden = true; return; }
+    box.hidden = false;
+    var w = v();
+    $('curvesList').innerHTML = CURVES.filter(function (c) { return c.view === cur; }).map(function (c) {
+      var nPts = (w.curves[c.id] || []).length, on = tracing === c.id;
+      return '<div class="crow"><span>' + esc(c.label) + ' <span class="hint">(' + nPts + ' pts)</span></span><span>' +
+        '<button class="btn small ' + (on ? 'btn-gold' : '') + '" data-trace="' + c.id + '">' + (on ? 'Done' : nPts ? 'Add' : 'Trace') + '</button>' +
+        (nPts ? '<button class="btn small" data-clear="' + c.id + '">Clear</button>' : '') + '</span></div>';
     }).join('');
-    $('readings').innerHTML = list.length + ' saved. Averages (number of readings):<table class="kv">' + rows + '</table><span class="hint">Clear these before measuring a different character.</span>';
+    Array.prototype.forEach.call(box.querySelectorAll('[data-trace]'), function (b) {
+      b.onclick = function () { if (!v().img) return; var id = b.getAttribute('data-trace'); tracing = tracing === id ? null : id; armed = null; draw(); };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll('[data-clear]'), function (b) {
+      b.onclick = function () { var id = b.getAttribute('data-clear'); delete v().curves[id]; if (tracing === id) tracing = null; draw(); };
+    });
   }
-  $('saveReading').addEventListener('click', function () {
-    var r = results(cur), z = sizes(results('front'), results('side')), rec = { t: Date.now(), name: v().name, view: cur };
-    if (r.heightIn && r.scaleFrom === 'ref' && r.heightHow === 'full') rec.height = r.heightIn;
-    if (r.heads) rec.heads = r.heads;
-    if (r.crotch != null) rec.crotch = r.crotch;
-    if (r.hipSh) rec.hipSh = r.hipSh;
-    if (r.waHi) rec.waHi = r.waHi;
-    ['bust', 'waist', 'hips'].forEach(function (k) { var it = z.items[k]; if (it && it.exact && z.from === 'ref') rec[k] = it.exact; });
-    if (z.shoe && z.from === 'ref') rec.shoe = z.shoe.size;
-    var list = load('pc-readings', []); list.push(rec); store('pc-readings', list); showReadings();
-  });
-  $('clearReadings').addEventListener('click', function () {
-    if (!load('pc-readings', []).length || confirm('Clear all saved readings?')) { store('pc-readings', []); showReadings(); }
-  });
 
-  /* ---- controls <-> state ---- */
+  function selName() {
+    if (!selected) return '';
+    if (selected.type === 'pt') { var st = stepByKey(selected.key); return st ? stepText(st).label : ''; }
+    var c = CURVES.filter(function (x) { return x.id === selected.id; })[0]; return c ? c.label + ' point' : '';
+  }
+  function nudge(dx, dy) {
+    var w = v(); if (!w.img || !selected) return;
+    var step = 1 / scale(), q = selected.type === 'pt' ? w.points[selected.key] : (w.curves[selected.id] || [])[selected.idx];
+    if (!q) return;
+    q.x = Math.max(0, Math.min(w.img.naturalWidth, q.x + dx * step)); q.y = Math.max(0, Math.min(w.img.naturalHeight, q.y + dy * step));
+    draw();
+  }
+
+  /* ---------- controls <-> state ---------- */
   function fillRefSelect(sel) {
     var html = '', g = null;
     REFS.forEach(function (d) {
@@ -994,14 +1603,12 @@ if (typeof document !== 'undefined') (function () {
     sel.innerHTML = html + '</optgroup>';
   }
   fillRefSelect($('ref1')); fillRefSelect($('ref2'));
-
-  function setSeg(id) {
-    Array.prototype.forEach.call($(id).querySelectorAll('label'), function (l) { l.classList.toggle('on', l.querySelector('input').checked); });
-  }
+  function setSeg(id) { Array.prototype.forEach.call($(id).querySelectorAll('label'), function (l) { l.classList.toggle('on', l.querySelector('input').checked); }); }
+  var TOGGLES = [['optK', 'keisha'], ['optM', 'muscular'], ['optW', 'widths'], ['optH', 'height'], ['optS', 'sizes'], ['optB', 'breast'], ['optX', 'extras'],
+    ['optL', 'limbs'], ['optF', 'face'], ['optT', 'turn'], ['optC', 'curves'], ['grid', 'grid']];
   function syncControls() {
     var w = v();
-    $('optK').checked = S.keisha; $('optW').checked = S.widths; $('optH').checked = S.height;
-    $('optS').checked = S.sizes; $('optX').checked = S.extras; $('headGuess').checked = S.headGuess; $('grid').checked = S.grid;
+    TOGGLES.forEach(function (k) { $(k[0]).checked = !!S[k[1]]; });
     document.querySelector('input[name=view][value=' + cur + ']').checked = true;
     document.querySelector('input[name=pose][value=' + w.pose + ']').checked = true;
     setSeg('segView'); setSeg('segPose');
@@ -1009,122 +1616,177 @@ if (typeof document !== 'undefined') (function () {
     $('ref1').value = w.ref1; $('ref2').value = w.ref2; $('ref2on').checked = w.ref2on; $('ref2box').hidden = !w.ref2on;
     [['ref1', 'ref1n'], ['ref2', 'ref2n']].forEach(function (k) {
       var d = refById(w[k[0]]);
-      $(k[1] + 'Wrap').hidden = !(d.custom || d.count);
+      $(k[1] + 'Wrap').hidden = !refNeedsNumber(d);
       $(k[1]).value = w[k[1]];
-      $(k[1] + 'Unit').textContent = d.count ? 'steps' : 'in';
+      $(k[1] + 'Unit').textContent = d.unit || 'in';
     });
     document.querySelector('input[name=hm][value=' + w.method + ']').checked = true;
-    $('methodBox').hidden = w.pose === 'lie';
+    $('methodBox').hidden = w.pose === 'lie' || !floorRefChosen(w);
     $('finderWrap').hidden = w.method !== 'floor';
     $('finder').checked = w.finder;
     $('shoes').value = String(w.shoes);
-    $('zoom').value = w.zoom; $('zoomVal').textContent = w.zoom + '×';
+    $('zoom').value = w.zoom; $('zoomVal').textContent = (Math.round(w.zoom * 4) / 4) + '×';
     $('empty').innerHTML = cur === 'side'
       ? '<p><b>Side picture.</b> Open, drag in, or paste (Cmd+V) a side view of the same character: standing straight, turned fully sideways.</p><p>Her head carries the ruler between the front and side pictures, so one reference object in either picture is enough.</p>'
-      : '<p><b>Front picture.</b> Open, drag in, or paste (Cmd+V) a picture.</p><p>Best: straight-on, head-to-toe, standing straight, feet flat, camera at chest or waist height.</p><p>Click the points in the order shown on the right. Drag any point to fine-tune it, and zoom in for accuracy.</p>';
+      : '<p><b>Front picture.</b> Open, drag in, or paste (Cmd+V) a picture.</p><p>Best: straight-on, head-to-toe, standing straight, feet flat, camera at chest or waist height.</p><p>Click the points in the order shown on the right. Press and slide to aim with the magnifier, lift to drop the point. Pinch or use the zoom slider to zoom up to 16×.</p>';
   }
-  function changed() { saveSettings(); syncControls(); if (v().img) draw(); else updatePanel(); }
+  function changed() { saveSettings(); syncControls(); draw(); }
 
   $('optK').addEventListener('change', function () {
-    if (this.checked) {
-      S.prev = { widths: S.widths, height: S.height, sizes: S.sizes, extras: S.extras, headGuess: S.headGuess };
-      S.keisha = true; S.widths = true; S.height = true; S.headGuess = false;
-    } else {
-      S.keisha = false;
-      if (S.prev) { Object.assign(S, S.prev); S.prev = null; }
-    }
+    if (this.checked) { S.prev = { widths: S.widths, height: S.height }; S.keisha = true; S.widths = true; S.height = true; }
+    else { S.keisha = false; if (S.prev) { S.widths = S.prev.widths; S.height = S.prev.height; S.prev = null; } }
     changed();
   });
-  [['optW', 'widths'], ['optH', 'height'], ['optS', 'sizes'], ['optX', 'extras'], ['headGuess', 'headGuess'], ['grid', 'grid']].forEach(function (k) {
-    $(k[0]).addEventListener('change', function () { S[k[1]] = this.checked; changed(); });
-  });
+  TOGGLES.slice(1).forEach(function (k) { $(k[0]).addEventListener('change', function () { S[k[1]] = this.checked; if (k[1] === 'curves' && !this.checked) tracing = null; changed(); }); });
   Array.prototype.forEach.call(document.querySelectorAll('input[name=view]'), function (el) {
-    el.addEventListener('change', function () { cur = this.value; syncControls(); computeFit(); resize(); });
+    el.addEventListener('change', function () { cur = this.value; armed = null; selected = null; tracing = null; syncControls(); computeFit(); draw(); });
   });
   Array.prototype.forEach.call(document.querySelectorAll('input[name=pose]'), function (el) {
-    el.addEventListener('change', function () {
-      v().pose = this.value;
-      if (this.value === 'lie' && refById(v().ref1).len !== true && v().ref1 === 'door') v().ref1 = 'mqueen';
-      changed();
-    });
+    el.addEventListener('change', function () { v().pose = this.value; if (this.value === 'lie' && v().ref1 === 'door') v().ref1 = 'mqueen'; changed(); });
   });
   [['ref1', 'ref1n'], ['ref2', 'ref2n']].forEach(function (k) {
     $(k[0]).addEventListener('change', function () {
       var d = refById(this.value); v()[k[0]] = this.value;
-      if (d.count) v()[k[1]] = 10; else if (d.custom) v()[k[1]] = 80;
+      if (d.per) v()[k[1]] = 10; else if (d.tv) v()[k[1]] = 55; else if (d.custom) v()[k[1]] = 80;
       changed();
     });
-    $(k[1]).addEventListener('input', function () { v()[k[1]] = parseFloat(this.value) || 0; saveSettings(); if (v().img) draw(); });
+    $(k[1]).addEventListener('input', function () { v()[k[1]] = parseFloat(this.value) || 0; draw(); });
   });
   $('ref2on').addEventListener('change', function () { v().ref2on = this.checked; changed(); });
-  Array.prototype.forEach.call(document.querySelectorAll('input[name=hm]'), function (el) {
-    el.addEventListener('change', function () { v().method = this.value; changed(); });
-  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=hm]'), function (el) { el.addEventListener('change', function () { v().method = this.value; changed(); }); });
   $('finder').addEventListener('change', function () { v().finder = this.checked; changed(); });
   $('shoes').addEventListener('change', function () { v().shoes = parseFloat(this.value) || 0; changed(); });
 
-  /* ---- clicking points ---- */
-  function toImg(e) {
-    var rect = cv.getBoundingClientRect(), img = v().img;
-    return {
-      x: Math.min(img.naturalWidth, Math.max(0, (e.clientX - rect.left) * img.naturalWidth / rect.width)),
-      y: Math.min(img.naturalHeight, Math.max(0, (e.clientY - rect.top) * img.naturalHeight / rect.height))
-    };
-  }
-  function hitTest(pt) {
-    var best = null, bestD = 14 / scale(), pts = activePoints(cur);
-    Object.keys(pts).forEach(function (k) {
-      var d = Math.hypot(pts[k].x - pt.x, pts[k].y - pt.y);
-      if (d <= bestD) { best = k; bestD = d; }
+  /* ---------- placing points: press, magnifier, drag, pinch, wheel ---------- */
+  function screenPos(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  function hitTest(sp) {
+    var w = v(), s = scale(), z = stageSize(), best = null, bestD = 14;
+    function scr(q) { return { x: (q.x - w.cx) * s + z.W / 2, y: (q.y - w.cy) * s + z.H / 2 }; }
+    var ap = activePoints(cur);
+    Object.keys(ap).forEach(function (k) { var q = scr(ap[k]), d = Math.hypot(q.x - sp.x, q.y - sp.y); if (d <= bestD) { bestD = d; best = { type: 'pt', key: k }; } });
+    if (S.curves) CURVES.forEach(function (c) {
+      if (c.view !== cur) return;
+      (w.curves[c.id] || []).forEach(function (q, i) { var p2 = scr(q), d = Math.hypot(p2.x - sp.x, p2.y - sp.y); if (d < bestD) { bestD = d; best = { type: 'cv', id: c.id, idx: i }; } });
     });
     return best;
   }
+  function placeAt(pt) {
+    var w = v();
+    if (tracing) { (w.curves[tracing] = w.curves[tracing] || []).push(pt); selected = { type: 'cv', id: tracing, idx: w.curves[tracing].length - 1 }; return; }
+    var n = nextStep(); if (!n) return;
+    w.points[n.key] = pt; delete w.skipped[n.key]; w.placed.push({ key: n.key });
+    selected = { type: 'pt', key: n.key };
+    if (armed === n.key) armed = null;
+  }
   function skipPoint() {
     var n = nextStep(); if (!n) return;
-    v().skipped[n.key] = true; v().placed.push({ key: n.key, skip: true }); draw();
+    v().skipped[n.key] = true; delete v().points[n.key]; v().placed.push({ key: n.key, skip: true }); draw();
   }
   cv.addEventListener('pointerdown', function (e) {
     if (!v().img) return;
     e.preventDefault();
-    var pt = toImg(e), hit = hitTest(pt);
-    if (hit) { dragKey = hit; cv.setPointerCapture(e.pointerId); return; }
-    var n = nextStep();
-    if (!n) return;
-    v().points[n.key] = pt; v().placed.push({ key: n.key });
+    try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+    pointers[e.pointerId] = screenPos(e);
+    var ids = Object.keys(pointers);
+    if (ids.length === 2) {
+      press = null;
+      var a = pointers[ids[0]], b = pointers[ids[1]], mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: v().zoom, mid0: mid, img0: toImgFromScreen(mid) };
+      draw(); return;
+    }
+    if (ids.length > 2) return;
+    // While points are still to place, every press places the next one (so close-together points are easy).
+    // Once every point is placed, pressing on a point drags it. Nudge arrows or the list fix points any time.
+    var sp = screenPos(e), hit = null;
+    if (!tracing && !armed && !nextStep()) hit = hitTest(sp);
+    press = { id: e.pointerId, start: sp, cur: sp, pt: clampPt(toImg(e.clientX, e.clientY)), hit: hit };
+    if (hit) selected = hit;
     draw();
   });
+  function toImgFromScreen(sp) { var z = stageSize(), s = scale(), w = v(); return { x: (sp.x - z.W / 2) / s + w.cx, y: (sp.y - z.H / 2) / s + w.cy }; }
   cv.addEventListener('pointermove', function (e) {
     if (!v().img) return;
-    if (!dragKey) { cv.style.cursor = hitTest(toImg(e)) ? 'grab' : (nextStep() ? 'crosshair' : 'default'); return; }
-    v().points[dragKey] = toImg(e); draw();
+    if (pointers[e.pointerId]) pointers[e.pointerId] = screenPos(e);
+    var ids = Object.keys(pointers);
+    if (pinch && ids.length >= 2) {
+      var a = pointers[ids[0]], b = pointers[ids[1]], mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      var w = v(), z = stageSize(), nz = Math.max(1, Math.min(16, pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0));
+      w.zoom = nz; var s = scale();
+      w.cx = pinch.img0.x - (mid.x - z.W / 2) / s; w.cy = pinch.img0.y - (mid.y - z.H / 2) / s;
+      $('zoom').value = nz; $('zoomVal').textContent = (Math.round(nz * 4) / 4) + '×';
+      draw(); return;
+    }
+    if (press && press.id === e.pointerId) {
+      press.cur = screenPos(e); press.pt = clampPt(toImg(e.clientX, e.clientY));
+      if (press.hit) {
+        var w2 = v();
+        if (press.hit.type === 'pt') w2.points[press.hit.key] = press.pt; else if (w2.curves[press.hit.id]) w2.curves[press.hit.id][press.hit.idx] = press.pt;
+      }
+      draw(); return;
+    }
+    if (e.pointerType === 'mouse') cv.style.cursor = hitTest(screenPos(e)) ? 'grab' : 'crosshair';
   });
-  function endDrag(e) { if (dragKey) { dragKey = null; try { cv.releasePointerCapture(e.pointerId); } catch (x) {} } }
-  cv.addEventListener('pointerup', endDrag);
-  cv.addEventListener('pointercancel', endDrag);
+  function endPointer(e, cancel) {
+    if (press && press.id === e.pointerId) {
+      if (!cancel && !press.hit) placeAt(press.pt);
+      press = null; draw();
+    }
+    delete pointers[e.pointerId];
+    if (Object.keys(pointers).length < 2) pinch = null;
+    try { cv.releasePointerCapture(e.pointerId); } catch (x) {}
+  }
+  cv.addEventListener('pointerup', function (e) { endPointer(e, false); });
+  cv.addEventListener('pointercancel', function (e) { endPointer(e, true); });
+  cv.addEventListener('wheel', function (e) {
+    if (!v().img) return;
+    e.preventDefault();
+    if (e.ctrlKey) setZoom(v().zoom * Math.exp(-e.deltaY * 0.01), screenPos(e));
+    else { var s = scale(); v().cx += e.deltaX / s; v().cy += e.deltaY / s; draw(); }
+  }, { passive: false });
+  document.addEventListener('keydown', function (e) {
+    if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement && document.activeElement.tagName)) return;
+    var map = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }, d = map[e.key];
+    if (d && selected) { e.preventDefault(); nudge(d[0] * (e.shiftKey ? 10 : 1), d[1] * (e.shiftKey ? 10 : 1)); }
+  });
 
   $('undo').addEventListener('click', function () {
-    var last = v().placed.pop(); if (!last) return;
-    if (last.skip) delete v().skipped[last.key]; else delete v().points[last.key];
+    var w = v();
+    if (tracing && (w.curves[tracing] || []).length) { w.curves[tracing].pop(); selected = null; draw(); return; }
+    var last = w.placed.pop(); if (!last) return;
+    if (last.skip) delete w.skipped[last.key]; else delete w.points[last.key];
+    if (selected && selected.key === last.key) selected = null;
     draw();
   });
   $('reset').addEventListener('click', function () {
-    if (!v().placed.length || confirm('Clear all points on this picture?')) { v().points = {}; v().skipped = {}; v().placed = []; draw(); }
+    if (!v().placed.length || confirm('Clear all points on this picture?')) { var w = v(); w.points = {}; w.skipped = {}; w.placed = []; armed = null; selected = null; draw(); }
   });
+  $('removePic').addEventListener('click', function () {
+    if (!confirm('Remove this ' + cur + ' picture and its points and traces?')) return;
+    V[cur] = newView(); armed = null; selected = null; tracing = null; syncControls(); draw();
+  });
+  $('startOver').addEventListener('click', function () {
+    if (!confirm('Start over? This removes both pictures and all points and traces.')) return;
+    V.front = newView(); V.side = newView(); armed = null; selected = null; tracing = null; syncControls(); draw();
+  });
+  $('fitBtn').addEventListener('click', function () { resetView(); syncControls(); draw(); });
+  $('zoom').addEventListener('input', function () { setZoom(parseFloat(this.value)); });
 
-  /* ---- opening pictures: button, drag and drop, paste ---- */
+  /* ---------- opening pictures: button, drag and drop, paste ---------- */
   function loadFile(f) {
     if (!f || !/^image\//.test(f.type)) { if (f) alert('That file is not a picture.'); return; }
-    var name = cur, w = V[name], url = URL.createObjectURL(f), im = new Image();
+    var name = cur, url = URL.createObjectURL(f), im = new Image();
     im.onload = function () {
+      var keep = V[name], w = newView();
+      ['pose', 'ref1', 'ref1n', 'ref2on', 'ref2', 'ref2n', 'method', 'finder', 'shoes'].forEach(function (k) { w[k] = keep[k]; });
       w.img = im; w.name = (f.name || 'picture').replace(/\.[^.]+$/, '') || 'picture';
-      w.points = {}; w.skipped = {}; w.placed = []; w.zoom = 1;
+      V[name] = w; armed = null; selected = null; tracing = null;
       if (name !== cur) return;
-      syncControls(); computeFit(); resize(); $('stage').scrollTop = 0;
+      resetView(); syncControls(); draw();
     };
     im.onerror = function () { alert('That file could not be opened as a picture.'); };
     im.src = url;
   }
-  $('file').addEventListener('change', function (e) { var f = e.target.files && e.target.files[0]; loadFile(f); e.target.value = ''; });
+  $('file').addEventListener('change', function (e) { loadFile(e.target.files && e.target.files[0]); e.target.value = ''; });
   var dragDepth = 0;
   function hasFiles(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0; }
   document.addEventListener('dragenter', function (e) { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
@@ -1141,33 +1803,26 @@ if (typeof document !== 'undefined') (function () {
     var items = (e.clipboardData && e.clipboardData.items) || [];
     for (var i = 0; i < items.length; i++) if (items[i].kind === 'file' && /^image\//.test(items[i].type)) { loadFile(items[i].getAsFile()); e.preventDefault(); return; }
   });
-
-  $('zoom').addEventListener('input', function () {
-    var st = $('stage');
-    var cx = (st.scrollLeft + st.clientWidth / 2) / (cv.width || 1), cy = (st.scrollTop + st.clientHeight / 2) / (cv.height || 1);
-    v().zoom = parseFloat(this.value); $('zoomVal').textContent = v().zoom + '×';
-    resize();
-    st.scrollLeft = cx * cv.width - st.clientWidth / 2;
-    st.scrollTop = cy * cv.height - st.clientHeight / 2;
-  });
-  window.addEventListener('resize', function () { if (v().img) { computeFit(); resize(); } });
+  window.addEventListener('resize', function () { if (v().img) { computeFit(); draw(); } });
 
   $('save').addEventListener('click', function () {
     var w = v(); if (!w.img) return;
-    var out = document.createElement('canvas');
-    out.width = w.img.naturalWidth; out.height = w.img.naturalHeight;
-    render(out.getContext('2d'), 1, Math.max(2, w.img.naturalWidth / 500), out.width, out.height, true);
+    var out = document.createElement('canvas'), W = w.img.naturalWidth, H = w.img.naturalHeight;
+    out.width = W; out.height = H;
+    var keepSel = selected; selected = null;
+    render(out.getContext('2d'), 1, W, H, W / 2, H / 2, 1, Math.max(2, W / 500), true);
+    selected = keepSel;
     out.toBlob(function (blob) {
       var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = w.name + '_' + cur + '_proportions.png';
+      a.href = URL.createObjectURL(blob); a.download = w.name + '_' + cur + '_proportions.png';
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
     }, 'image/png');
   });
 
-  syncControls(); showReadings(); updatePanel();
+  syncControls(); draw();
 })();
+
 </script>
 </body>
 </html>
