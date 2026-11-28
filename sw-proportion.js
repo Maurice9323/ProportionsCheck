@@ -1,7 +1,7 @@
 // Service worker for proportion only.
 // Bump the number in VERSION to make phones drop the old cache right away.
 const PREFIX = 'proportion-';
-const VERSION = PREFIX + 'v3';
+const VERSION = PREFIX + 'v4';
 
 const ASSETS = [
   './',
@@ -12,6 +12,10 @@ const ASSETS = [
   './proportion-512.png',
   './proportion-maskable-512.png'
 ];
+
+// The theme fonts come from Google. They are saved the first time the app
+// opens online, so the app keeps its look offline.
+const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -30,14 +34,28 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Opens instantly from the cache (works offline), then quietly
-// fetches a fresh copy so the next open has any update you pushed.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  // Fonts: use the saved copy if there is one; otherwise fetch it and save it.
+  if (FONT_HOSTS.includes(url.hostname)) {
+    event.respondWith(
+      caches.open(VERSION).then((cache) =>
+        cache.match(req).then((cached) => cached || fetch(req).then((res) => {
+          if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+          return res;
+        }).catch(() => cached || Response.error()))
+      )
+    );
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
+  // App files: open instantly from the cache (works offline), then quietly
+  // fetch a fresh copy so the next open has any update you pushed.
   event.respondWith(
     caches.open(VERSION).then((cache) =>
       cache.match(req, { ignoreSearch: true }).then((cached) => {
